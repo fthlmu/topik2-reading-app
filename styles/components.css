@@ -1,0 +1,238 @@
+/* components.css: passage, 〈보기〉 box, choices (OMR ovals), verdict, folds,
+   explanation, chips. Ovals themselves: styles/omr.css. English layer: styles/translate.css. */
+
+/* ── Instruction ────────────────────────────────────── */
+.instruction { margin: 20px 0 0; font: 500 15px/1.6 var(--font-ui); color: var(--ink); }
+
+/* ── Passage (the hero) ─────────────────────────────── */
+.study__passage,
+.sprint__passage,
+.rq__passage {
+  margin: 24px 0 0;
+  padding: 32px 0;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+
+.passage {
+  max-width: var(--measure);
+  font-family: var(--font-passage);
+  font-size: 19px;
+  line-height: 1.9;
+  color: var(--ink);
+}
+.passage p { margin: 0; }
+.passage__para { text-indent: 1em; }
+.passage__para + .passage__para { margin-top: 0.55em; }
+
+.passage__box {
+  padding: 20px 24px;
+  border: 1px solid var(--ink-3);
+  border-radius: var(--radius-sm);
+}
+.passage__box--ad { text-align: center; }
+.passage__line + .passage__line { margin-top: 0.3em; }
+
+/* Notice (Q9) */
+.notice { font-size: 17px; line-height: 1.75; }
+.notice__category { text-align: center; font-weight: 700; letter-spacing: 0.08em; }
+.notice .notice__headline { text-align: center; margin: 0.35em 0 0.2em; }
+.notice__activity { text-align: center; color: var(--ink-2); }
+.notice__items {
+  display: grid;
+  gap: 0.35em;
+  margin: 1em 0 0;
+  padding-top: 0.9em;
+  border-top: 1px solid var(--rule);
+}
+.notice__row { display: grid; grid-template-columns: 6.5em minmax(0, 1fr); gap: 0.75em; }
+.notice__row dt { font-weight: 600; }
+.notice__row dt::before { content: "•"; margin-right: 0.4em; color: var(--ink-3); }
+.notice__row dd { margin: 0; }
+@media (max-width: 479px) {
+  .notice__row { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .notice__row + .notice__row { margin-top: 0.4em; }
+}
+
+/* Chart (Q10): SVG bars sized by attribute, coloured here. */
+.chart { margin: 0; font-size: 16px; line-height: 1.5; }
+.chart__title {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 18px;
+  font-weight: 600;
+  text-align: center;
+}
+.chart__subtitle { font-weight: 400; font-size: 14px; color: var(--ink-2); }
+.chart__bars { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.chart__row {
+  display: grid;
+  grid-template-columns: minmax(6.5em, 36%) minmax(0, 1fr) 3.2em;
+  align-items: center;
+  gap: 12px;
+}
+.chart__bar { display: block; width: 100%; height: 12px; }
+.chart__track { fill: var(--paper-2); }
+.chart__fill { fill: var(--ink-3); }
+.chart__row--top .chart__fill { fill: var(--ink); }
+.chart__pct { font: 500 13px var(--font-ui); font-variant-numeric: tabular-nums; text-align: right; }
+
+/* Ordering (Q13–15) */
+.ordering { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.7em; }
+.ordering__item { display: grid; grid-template-columns: 2.6em minmax(0, 1fr); gap: 0.2em; }
+.ordering__label { color: var(--ink-2); }
+
+/* Blank, underline, withheld */
+.blank { white-space: nowrap; color: var(--ink-2); }
+.blank__gap { display: inline-block; width: 4.5em; }
+.ul {
+  text-decoration: underline;
+  text-decoration-color: var(--ink);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 0.28em;
+}
+.passage--withheld { color: var(--ink-2); text-align: center; font-size: 17px; }
+.passage--withheld .passage__para { text-indent: 0; }
+.passage__missing { color: var(--ink-3); }
+
+/* Gloss words, the tooltip and the line translation: styles/translate.css. */
+
+/* A recap-only lesson is preceded by the full shared passage (Passage.renderFull). */
+.passage-lead { margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px dashed var(--rule); }
+
+/* 〈보기〉 sentence-insertion box: label sits on the top rule, as on the paper. */
+.insert-box {
+  position: relative;
+  max-width: var(--measure);
+  margin: 6px 0 28px;
+  padding: 18px 20px 14px;
+  border: 1px solid var(--ink-3);
+  border-radius: var(--radius-sm);
+}
+.insert-box__label {
+  position: absolute;
+  top: -0.8em;
+  left: 14px;
+  margin: 0;
+  padding: 0 6px;
+  background: var(--paper);
+  font: 600 13px/1.6 var(--font-passage);
+  color: var(--ink-2);
+  letter-spacing: 0.1em;
+}
+.insert-box__hint { font: 400 12px var(--font-ui); letter-spacing: 0; color: var(--ink-3); }
+.insert-box__text { margin: 0; font-family: var(--font-passage); font-size: 18px; line-height: 1.8; }
+
+/* ── Choices: [oval] + serif text, one row per choice ── */
+.study__answer,
+.sprint__answer,
+.rq__choices { margin-top: 20px; }
+.choices { list-style: none; margin: 0; padding: 0 0 8px; display: grid; gap: 4px; max-width: var(--measure); }
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  min-height: 48px;
+  padding: 4px 8px;
+  font: 400 19px/1.5 var(--font-passage);
+  color: var(--ink);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  transition: color var(--fast) ease-out;
+}
+button.choice { cursor: pointer; }
+button.choice:hover .ov:not(.fill) { border-color: var(--ink); }
+.choice__kr { font: inherit; }
+.choice__body { display: flex; flex-direction: column; gap: 1px; min-width: 0; padding: 6px 0; }
+.choice__roman { font: italic 400 13px/1.4 var(--font-ui); color: var(--ink-3); }
+.choice__num { font: 400 15px/1.6 var(--font-ui); font-variant-numeric: tabular-nums; color: var(--ink-2); }
+
+/* Sprint and mock: the pick fills its oval (sprint also locks the rest). */
+.choice.is-picked .ov { background-color: var(--ink); border-color: var(--ink); color: transparent; }
+.choices--locked button.choice { cursor: default; }
+.choices--locked button.choice:hover .ov:not(.fill) { border-color: var(--omr-print); }
+.choices--locked .choice:not(.is-picked) { color: var(--ink-2); }
+
+/* Verdict line under the choices, in red pen. */
+.study__verdict {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding: 12px 0 18px;
+}
+.study__verdict:empty { display: none; }
+.study__verdict-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.verdict { margin: 0; font: 600 15px/1.5 var(--font-ui); color: var(--pen); }
+.verdict:focus { outline: none; }
+
+/* ── Folds (<details>): 44px rows between rules ─────── */
+.folds { margin-top: 8px; border-top: 1px solid var(--ink); }
+.fold { border-bottom: 1px solid var(--rule); }
+.fold__summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 0;
+  font: 600 14px var(--font-ui);
+  list-style: none;
+  cursor: pointer;
+}
+.fold__summary::-webkit-details-marker { display: none; }
+.fold__summary::after {
+  content: "+";
+  margin-left: auto;
+  font: 400 18px/1 var(--font-ui);
+  color: var(--ink-3);
+}
+.fold[open] > .fold__summary::after { content: "\2212"; }
+.fold__summary:hover::after { color: var(--ink); }
+.fold__count { font: 400 14px var(--font-ui); font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.fold__body { padding: 4px 0 28px; }
+.empty { margin: 0; color: var(--ink-3); font-size: 14px; }
+
+/* Explanation */
+.why + .why { margin-top: 24px; }
+.why__label { margin: 0 0 8px; font: 600 13px var(--font-ui); color: var(--ink-2); }
+.why--right .why__label { color: var(--pen); }
+.why__text { max-width: var(--measure); font-size: 15px; line-height: 1.75; }
+.why__text b, .why__text strong { font-weight: 600; }
+.why__text em { font-style: normal; font-family: var(--font-passage); }
+.why__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.why__item {
+  display: grid;
+  grid-template-columns: 1.8em minmax(0, 1fr);
+  gap: 6px;
+  padding-left: 10px;
+  border-left: 2px solid var(--rule);
+}
+.why__item.is-chosen { border-left-color: var(--pen); }
+.why__num { font: 400 15px/1.75 var(--font-ui); font-variant-numeric: tabular-nums; color: var(--ink-2); }
+.why__tag { font: 600 12px var(--font-ui); color: var(--pen); }
+
+/* ── Chips (vocab, strategy signal words) ──────────── */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.chip {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  padding: 3px 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+}
+.chips--sm .chip { font-size: 13px; padding: 2px 7px; }
+.chip__kr { font-family: var(--font-passage); }
+.chip__roman { font: italic 400 12px var(--font-ui); color: var(--ink-3); }
+.chip__sep { color: var(--ink-3); }
+.chip__en { color: var(--ink-2); }

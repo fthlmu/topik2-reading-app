@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TOPIK II 읽기 — 102회 인터랙티브 레슨</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- ── SIDEBAR ── -->
+    <aside id="sidebar">
+      <div id="sidebar-header">
+        <div id="logo">TOPIK II</div>
+        <div id="exam-info">102회 읽기 (2025.10.19)</div>
+        <div id="progress-wrap">
+          <div id="progress-bar"><div id="progress-fill"></div></div>
+          <div id="progress-text">0 / 50 완료</div>
+        </div>
+      </div>
+      <nav id="lesson-nav">
+        <!-- populated by app.js -->
+      </nav>
+      <div id="sidebar-footer">
+        <span>All 50 lessons loaded · <a href="#" id="batch-info-link">about batches</a></span>
+      </div>
+    </aside>
+
+    <!-- ── MAIN PANEL ── -->
+    <main id="main-panel">
+      <div id="lesson-panel">
+
+        <!-- WELCOME SCREEN (shown before any lesson is selected) -->
+        <div id="welcome-screen">
+          <div id="welcome-inner">
+            <h1>TOPIK II 읽기 레슨</h1>
+            <p class="welcome-sub">102회 한국어능력시험 — 2025년 10월 19일</p>
+            <p class="welcome-desc">50문항을 다루는 자기 학습 앱입니다.<br>왼쪽 목록에서 문제를 선택하면 레슨이 시작됩니다.</p>
+            <div class="welcome-features">
+              <div class="feat"><span class="feat-icon">📖</span><span>단어별 발음·뜻 툴팁</span></div>
+              <div class="feat"><span class="feat-icon">🃏</span><span>어휘 플래시카드</span></div>
+              <div class="feat"><span class="feat-icon">✏️</span><span>문법 퀴즈</span></div>
+              <div class="feat"><span class="feat-icon">💡</span><span>틀린 답 해설</span></div>
+            </div>
+            <button class="btn-primary" id="start-btn">Q1부터 시작하기</button>
+          </div>
+        </div>
+
+        <!-- LESSON CONTENT (hidden until a lesson is selected) -->
+        <div id="lesson-content" class="hidden">
+
+          <!-- LESSON HEADER -->
+          <div id="lesson-header">
+            <div id="lesson-meta">
+              <span id="lesson-num-badge"></span>
+              <span id="lesson-type-badge"></span>
+              <span id="lesson-section-badge"></span>
+            </div>
+            <div id="lesson-nav-arrows">
+              <button id="prev-btn" class="nav-arrow" title="Previous question">◀ 이전</button>
+              <button id="next-btn" class="nav-arrow" title="Next question">다음 ▶</button>
+            </div>
+          </div>
+
+          <!-- GROUP INSTRUCTION -->
+          <div id="group-instruction-box" class="instruction-box">
+            <div class="instr-kr" id="group-instr-kr"></div>
+            <div class="instr-en" id="group-instr-en"></div>
+          </div>
+
+          <!-- PASSAGE AREA -->
+          <div id="passage-area">
+            <div id="passage-label">지문 / Passage</div>
+            <div id="passage-content"></div>
+            <div id="passage-note" class="hidden"></div>
+          </div>
+
+          <!-- CHOICES AREA -->
+          <div id="choices-area">
+            <div id="choices-label">선택지 / Choices <span id="choices-hint">(선택해서 정답을 확인하세요)</span></div>
+            <div id="choices-list"></div>
+          </div>
+
+          <!-- ANSWER REVEAL (hidden until choice is made) -->
+          <div id="answer-reveal" class="hidden">
+            <div id="reveal-header">
+              <span id="reveal-verdict"></span>
+              <span id="reveal-answer"></span>
+            </div>
+            <div id="reveal-why-right"></div>
+            <div id="reveal-why-wrong" class="hidden"></div>
+            <button id="reset-choices-btn" class="btn-outline">다시 선택하기</button>
+          </div>
+
+          <!-- TABS: VOCAB / GRAMMAR / QUIZ -->
+          <div id="tabs-area">
+            <div id="tab-buttons">
+              <button class="tab-btn active" data-tab="vocab">📚 어휘 플래시카드</button>
+              <button class="tab-btn" data-tab="grammar">📝 문법 포인트</button>
+              <button class="tab-btn" data-tab="quiz">✏️ 연습 퀴즈</button>
+            </div>
+
+            <!-- VOCAB TAB -->
+            <div id="tab-vocab" class="tab-pane active">
+              <div id="flashcard-container">
+                <div id="flashcard-wrap">
+                  <div id="flashcard" class="fc-face-front">
+                    <div id="fc-front"></div>
+                    <div id="fc-back" class="hidden"></div>
+                  </div>
+                </div>
+                <div id="flashcard-controls">
+                  <button id="fc-prev" class="btn-outline">◀</button>
+                  <span id="fc-counter"></span>
+                  <button id="fc-next" class="btn-outline">▶</button>
+                  <button id="fc-shuffle" class="btn-outline" title="Shuffle cards">🔀</button>
+                </div>
+                <div id="fc-tap-hint">카드를 클릭하면 뒤집어집니다</div>
+              </div>
+            </div>
+
+            <!-- GRAMMAR TAB -->
+            <div id="tab-grammar" class="tab-pane hidden">
+              <div id="grammar-content"></div>
+            </div>
+
+            <!-- QUIZ TAB -->
+            <div id="tab-quiz" class="tab-pane hidden">
+              <div id="quiz-content">
+                <div id="quiz-progress"></div>
+                <div id="quiz-question-area"></div>
+                <div id="quiz-feedback" class="hidden"></div>
+                <div id="quiz-score" class="hidden"></div>
+              </div>
+            </div>
+
+          </div><!-- /tabs-area -->
+
+          <!-- LESSON COMPLETE BADGE -->
+          <div id="complete-badge" class="hidden">
+            ✅ 이 문제 완료! 진도에 저장되었습니다.
+          </div>
+
+        </div><!-- /lesson-content -->
+      </div><!-- /lesson-panel -->
+    </main>
+
+  </div><!-- /app -->
+
+  <!-- TOOLTIP (single global element) -->
+  <div id="gloss-tooltip" class="hidden">
+    <div id="tt-roman"></div>
+    <div id="tt-en"></div>
+  </div>
+
+  <script src="lessons.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

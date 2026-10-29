@@ -1,0 +1,331 @@
+/* styles.css: "Exam paper" tokens, base, top bar, page widths, buttons, print.
+   OMR answer card: styles/omr.css · Components: styles/components.css · Screens: styles/screens.css
+   Rules: 1px rules not cards · radius ≤ 4px · no shadows · no gradients · no emoji.
+   One accent (--pen). --omr-print is the card's printed red: lines and resting ovals only, never text. */
+
+/* ── Tokens ─────────────────────────────────────────── */
+:root {
+  --paper: #F7F4EE;
+  --paper-2: #EFEAE0;
+  --ink: #1B1B1F;
+  --ink-2: #4A4A52;
+  --ink-3: #6B6B74;         /* 4.8:1 on paper */
+  --rule: #D9D3C7;
+  --omr-print: #CF6A61;     /* 3.25:1 on paper: non-text only */
+  --pen: #C8372D;
+
+  --font-passage: 'Noto Serif KR', 'Nanum Myeongjo', 'AppleMyungjo', serif;
+  --font-ui: 'Pretendard Variable', 'Pretendard', 'Noto Sans KR', system-ui, sans-serif;
+
+  --page: 760px;            /* reading column: Study, Sprint, Mock */
+  --page-wide: 1160px;      /* Today, Map, Review, Deck at 1000px and up */
+  --measure: 68ch;
+  --gutter: 16px;
+  --radius: 4px;
+  --radius-sm: 2px;
+  --fast: 150ms;
+
+  color-scheme: light;
+}
+
+/* Dark: the card under a desk lamp. --ink-3 5.1:1, --omr-print 3.4:1 on dark paper. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #1C1B19;
+    --paper-2: #242320;
+    --ink: #ECE7DC;
+    --ink-2: #B9B3A6;
+    --ink-3: #918B80;
+    --rule: #35332E;
+    --omr-print: #A35A53;
+    --pen: #E4574B;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper: #1C1B19;
+  --paper-2: #242320;
+  --ink: #ECE7DC;
+  --ink-2: #B9B3A6;
+  --ink-3: #918B80;
+  --rule: #35332E;
+  --omr-print: #A35A53;
+  --pen: #E4574B;
+  color-scheme: dark;
+}
+
+/* ── Base ───────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  background: var(--paper);
+  -webkit-text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scroll-padding-top: 72px;
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 16px/1.6 var(--font-ui);
+  word-break: keep-all;          /* Korean: break between words, not inside */
+  overflow-wrap: break-word;     /* but never overflow (URLs, long tokens) */
+}
+
+[hidden] { display: none !important; }
+
+a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-3);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+a:hover { text-decoration-color: var(--ink); }
+
+:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+h1, h2, h3 { text-wrap: balance; }
+p, li { text-wrap: pretty; }
+
+code { font-family: inherit; font-size: 0.95em; font-weight: 600; }
+
+kbd {
+  display: inline-block;
+  min-width: 1.5em;
+  padding: 0 4px;
+  font: 500 11px/1.6 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+  text-align: center;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+}
+
+/* Numbers: Pretendard with aligned digits (timers, counts, digit boxes). */
+.num {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  left: 8px;
+  top: -64px;
+  z-index: 20;
+  padding: 8px 12px;
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: var(--radius);
+}
+.skip-link:focus { top: 8px; }
+
+/* ── Top bar ────────────────────────────────────────── */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+}
+
+.topbar__inner {
+  max-width: var(--page);
+  margin: 0 auto;
+  padding: 4px var(--gutter);
+  min-height: 52px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 12px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  margin-right: auto;
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--ink);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.brand__dot { color: var(--ink-3); }
+.brand .num { font-size: 13px; font-weight: 500; color: var(--ink-2); }
+
+.topnav { display: flex; gap: 2px; }
+
+.topnav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 10px;
+  font-size: 14px;
+  color: var(--ink-2);
+  text-decoration: none;
+  transition: color var(--fast) ease-out;
+}
+.topnav a:hover { color: var(--ink); }
+.topnav a[aria-current="page"] {
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-color: var(--ink);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 6px;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 10px;
+  font: 500 13px var(--font-ui);
+  color: var(--ink-2);
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: color var(--fast) ease-out, border-color var(--fast) ease-out;
+}
+.theme-toggle:hover { color: var(--ink); border-color: var(--ink-3); }
+
+/* Phone: brand + theme on row 1, nav on row 2. */
+@media (max-width: 559px) {
+  .theme-toggle { order: 2; }
+  .topnav { order: 3; width: calc(100% + 20px); margin: 0 -10px; }
+}
+
+.storage-note {
+  max-width: var(--page);
+  margin: 0 auto;
+  padding: 8px var(--gutter);
+  font-size: 13px;
+  color: var(--pen);
+}
+
+/* ── Page: one reading column; non-passage screens widen at 1000px and up ── */
+.page {
+  padding: 32px var(--gutter) 96px;
+  outline: none;
+}
+
+.screen,
+.page > .placeholder {
+  max-width: calc(var(--page) - 32px);
+  margin-inline: auto;
+}
+
+@media (min-width: 1000px) {
+  :root { --gutter: 40px; }
+  .topbar__inner { max-width: var(--page-wide); }
+  .screen--today,
+  .screen--map,
+  .screen--review,
+  .screen--deck { max-width: calc(var(--page-wide) - 2 * var(--gutter)); }
+}
+
+/* ── Buttons ────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 18px;
+  font: 500 15px/1.2 var(--font-ui);
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--ink);
+  border-radius: 3px;
+  text-decoration: none;
+  cursor: pointer;
+  transition-property: background-color, color, border-color, transform;
+  transition-duration: var(--fast);
+  transition-timing-function: ease-out;
+}
+.btn:hover { background: var(--paper-2); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+
+.btn--primary { background: var(--ink); color: var(--paper); }
+.btn--primary:hover { background: var(--ink-2); border-color: var(--ink-2); }
+
+.btn--lg { min-height: 48px; padding: 10px 22px; font-size: 16px; }
+
+.btn--quiet {
+  border-color: transparent;
+  color: var(--ink-2);
+  padding-inline: 10px;
+}
+.btn--quiet:hover {
+  background: transparent;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* On/off chip (주석, 로마자, 모두 보기). Pressed = ink on paper. */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 10px;
+  font: 500 13px var(--font-ui);
+  color: var(--ink-2);
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: color var(--fast) ease-out, border-color var(--fast) ease-out;
+}
+.toggle:hover { color: var(--ink); border-color: var(--ink-3); }
+.toggle[aria-pressed="true"] { color: var(--ink); border-color: var(--ink); }
+
+/* ── Motion & print ─────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media print {
+  :root, :root[data-theme="dark"], :root:not([data-theme="light"]) {
+    --paper: #FFFFFF;
+    --paper-2: #F4F4F4;
+    --ink: #000000;
+    --ink-2: #333333;
+    --ink-3: #666666;
+    --rule: #BBBBBB;
+    color-scheme: light;
+  }
+  .topbar, .storage-note, .skip-link, .gloss-tip, .pager, .keys-hint, .toggle,
+  .theme-toggle, .flash__bar, .study__verdict .btn, .omr-dock { display: none !important; }
+  .page { padding: 0; }
+  .screen { max-width: none; }
+}

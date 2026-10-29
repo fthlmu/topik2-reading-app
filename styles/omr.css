@@ -1,0 +1,211 @@
+/* omr.css: the OMR answer card (답안지) motif. Every piece carries real state:
+   ovals are answers, digit columns are the countdown, strips are the current set.
+   Printed parts use --omr-print (lines and resting ovals, never text), your marks
+   are --ink, grading marks are --pen: ○ correct, △ correct but unsure, / wrong. */
+
+/* ── Oval ───────────────────────────────────────────── */
+.ov {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 20px;
+  height: 24px;
+  border: 1.5px solid var(--omr-print);
+  border-radius: 50%;
+  font: 500 10px/1 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+  background-color: transparent;
+  transition: background-color var(--fast) ease-out, border-color var(--fast) ease-out, color var(--fast) ease-out;
+}
+.ov--md { width: 26px; height: 32px; font-size: 12px; }
+.ov--lg { width: 28px; height: 34px; font-size: 13px; }
+
+/* Your mark: a computer sign pen fills the oval and covers the printed number. */
+.ov.fill { background-color: var(--ink); border-color: var(--ink); color: transparent; }
+
+/* The one motion: ink spreading into the oval you just chose. */
+@keyframes ov-fill {
+  from { background-color: transparent; border-color: var(--omr-print); }
+}
+.ov.fill.is-fresh { animation: ov-fill var(--fast) ease-out; }
+
+/* ○ red ring: the right answer. */
+.ov.ok { outline: 2px solid var(--pen); outline-offset: 2px; }
+.ov--lg.ok, .ov--md.ok { outline-offset: 3px; }
+
+/* / red slash through a wrong mark. The 1px paper edge keeps red readable on the ink fill in both themes. */
+.ov.bad::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -4px;
+  bottom: -4px;
+  width: 2.5px;
+  margin-left: -1.25px;
+  background: var(--pen);
+  border-radius: 1px;
+  outline: 1px solid var(--paper);
+  transform: rotate(32deg);
+}
+
+/* △ red triangle over the fill: right, but marked 애매. Paper halo below, red stroke on top. */
+.ov.unsure::before,
+.ov.unsure::after {
+  content: "";
+  position: absolute;
+  inset: 12% 4% 16%;
+  -webkit-mask: var(--ov-tri) center / contain no-repeat;
+  mask: var(--ov-tri) center / contain no-repeat;
+}
+.ov.unsure::before {
+  --ov-tri: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M10 3.2 17.2 16.2H2.8Z' fill='none' stroke='%23000' stroke-width='5.2' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background: var(--paper);
+}
+.ov.unsure::after {
+  --ov-tri: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M10 3.2 17.2 16.2H2.8Z' fill='none' stroke='%23000' stroke-width='2.4' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background: var(--pen);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ov { transition: none; }
+  .ov.fill.is-fresh { animation: none; }
+}
+
+/* ── Printed panel + timing marks ───────────────────── */
+.omr-panel { position: relative; border: 1.5px solid var(--omr-print); }
+
+.omr-ticks {
+  position: absolute;
+  left: -20px;
+  top: 8px;
+  bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.omr-tick { display: block; width: 9px; height: 4px; background: var(--ink); }
+
+/* No outer margin for the marks on narrow screens: indent the panel instead. */
+@media (max-width: 775px) {
+  .omr-panel--ticks { margin-left: 20px; }
+}
+
+/* ── Digit columns (수험번호 style countdown) ──────── */
+.dcols { display: flex; gap: 10px; }
+.dcol { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.dcol__box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 40px;
+  margin-bottom: 2px;
+  border: 1.5px solid var(--omr-print);
+  font: 600 26px/1 var(--font-passage);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+/* ── Answer-card row: [set letter] number ① ② ③ ④ ──── */
+.omr-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ink);
+  text-decoration: none;
+}
+.omr-row__set { flex: none; width: 11px; font: 700 11px/1 var(--font-ui); color: var(--pen); }
+.omr-row__qn {
+  flex: none;
+  width: 18px;
+  margin-right: 2px;
+  font: 500 12px/1 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+  text-align: right;
+}
+.omr-row__ovals { display: inline-flex; align-items: center; gap: 3px; }
+
+a.omr-row,
+button.omr-row {
+  min-height: 44px;
+  padding: 0 6px;
+  font: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+a.omr-row:hover .omr-row__qn,
+button.omr-row:hover .omr-row__qn { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+a.omr-row:hover .ov:not(.fill),
+button.omr-row:hover .ov:not(.fill) { border-color: var(--ink-3); }
+
+/* The question on screen now. */
+.omr-row[aria-current] .omr-row__qn {
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 3px;
+}
+
+/* ── Card grid (Today: 5 columns x 10 rows) ─────────── */
+.omr-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 12px 10px;
+  padding: 14px 14px 16px;
+  color: inherit;
+  text-decoration: none;
+}
+.omr-grid__col { display: flex; flex-direction: column; gap: 6px; }
+a.omr-grid:hover .omr-row__qn { color: var(--ink); }
+
+/* ── Legend: the card's own 표기 line ───────────────── */
+.omr-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.omr-legend li { display: inline-flex; align-items: center; gap: 7px; }
+
+/* ── Set strip (Study) and answer strip (Sprint, Mock) ── */
+.omr-dock { margin-top: 40px; }
+
+.omr-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 16px;
+  padding: 6px 16px;
+}
+.omr-strip__set { display: flex; flex-wrap: wrap; align-items: center; gap: 0 18px; }
+.omr-strip__label { margin: 0; font: 500 12px/1.5 var(--font-ui); color: var(--ink-2); }
+.omr-strip__rows { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; margin: 0; padding: 0; list-style: none; }
+.omr-strip__rows > li { display: flex; }
+.omr-strip .omr-row { min-height: 44px; }
+.omr-strip__keys { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; font-size: 12px; color: var(--ink-2); }
+@media (hover: none) { .omr-strip__keys { display: none; } }
+
+/* Sprint and mock pin the strip to the bottom when the screen is tall enough. */
+@media (min-width: 600px) and (min-height: 640px) {
+  .omr-dock--pinned {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    padding: 10px 0 max(12px, env(safe-area-inset-bottom));
+    background: var(--paper);
+  }
+}
+.omr-dock--pinned { margin-top: 28px; }

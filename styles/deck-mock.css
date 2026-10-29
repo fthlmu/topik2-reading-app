@@ -1,0 +1,177 @@
+/* deck-mock.css: review deck (#/deck), mock exam (#/mock, #/mock/run),
+   mock review table, Today's discard question. Built on the flashcard (.flash__*),
+   set-card, pause-bar and sprint classes; same rules as styles.css:
+   1px rules, radius ≤ 4px, no shadows, no gradients, no emoji. */
+
+/* ── Today: inline "discard?" question ─────────────── */
+.set-card__ask { flex-basis: 100%; margin: 0; font-size: 14px; color: var(--pen); }
+
+/* ── Deck ───────────────────────────────────────────── */
+.deck__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+.deck__progress { margin: 0; font-size: 15px; font-weight: 600; color: var(--ink-2); }
+
+.deck__stage { max-width: 440px; margin-top: 24px; }
+.deck__card { position: relative; min-height: 232px; padding-top: 36px; }
+.deck__src {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-3);
+}
+.deck__pattern { font-size: 22px; line-height: 1.45; }
+.deck__plain { max-width: 38ch; font-size: 15px; line-height: 1.65; color: var(--ink); text-align: left; }
+.deck__example {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-width: 38ch;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--rule);
+  text-align: left;
+}
+.deck__ex-kr { font: 400 16px/1.6 var(--font-passage); }
+.deck__ex-en { font-size: 13px; line-height: 1.5; color: var(--ink-2); }
+
+.deck__grades { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.deck__grades .btn { min-height: 48px; }
+.deck__grades [data-grade="0"]:hover { border-color: var(--pen); color: var(--pen); background: transparent; }
+
+.deck__summary { margin: 24px 0 20px; font-size: 17px; }
+.deck__summary .num { font-weight: 600; }
+.deck__known { color: var(--ink); font-weight: 600; }
+.deck__unknown { color: var(--pen); }
+.deck__next { margin: 0; font-size: 14px; color: var(--ink-3); }
+.deck__actions { margin-top: 24px; }
+
+/* Empty deck: one 1px-ruled bar per Leitner box (SVG, sized by attribute). */
+.deck-boxes { max-width: 440px; margin: 24px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--rule); }
+.deck-box {
+  display: grid;
+  grid-template-columns: 4.2em minmax(0, 1fr) 2.6em 3.2em;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  font-size: 13px;
+  color: var(--ink-2);
+  border-bottom: 1px solid var(--rule);
+}
+.deck-box__bar { display: block; width: 100%; height: 8px; }
+.deck-box__track { fill: none; stroke: var(--ink-3); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.deck-box__fill { fill: var(--ink-2); }
+.deck-box__n { text-align: right; font-weight: 600; color: var(--ink); }
+.deck-box__gap { text-align: right; color: var(--ink-3); }
+
+/* ── Mock: confirm screen ──────────────────────────── */
+.mock-intro__rules {
+  max-width: var(--measure);
+  margin: 20px 0 0;
+  padding-left: 1.2em;
+  font-size: 15px;
+  line-height: 1.8;
+}
+.mock-intro__note { margin: 12px 0 0; font-size: 13px; color: var(--ink-3); }
+
+/* ── Mock: runner (shares .sprint__head / .sprint__count with Sprint) ── */
+.mock__clock {
+  margin: 0;
+  padding: 2px 12px;
+  font-size: 22px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  border: 1.5px solid var(--omr-print);
+}
+.mock__clock.is-low { color: var(--pen); }
+
+.palette {
+  margin-top: 10px;
+  padding: 2px 0 8px;
+  border-top: 1px solid var(--ink);
+  border-bottom: 1px solid var(--rule);
+}
+.palette__list { display: flex; flex-wrap: wrap; gap: 0 2px; margin: 0; padding: 0; list-style: none; }
+.pal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0;
+  font: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.pal .ov { width: 24px; height: 28px; font-size: 11px; color: var(--ink-2); }
+.pal:hover .ov { border-color: var(--ink); color: var(--ink); }
+.pal.is-answered .ov { background-color: var(--ink); border-color: var(--ink); color: var(--paper); }
+.pal.is-current .ov { outline: 2px solid var(--ink); outline-offset: 2px; color: var(--ink); }
+.pal.is-current.is-answered .ov { color: var(--paper); }
+.palette__count { margin: 4px 0 0; font-size: 12px; color: var(--ink-3); }
+.palette__count .num { color: var(--ink-2); font-weight: 600; }
+
+.mock__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
+}
+.mock__spacer { flex: 1 1 auto; }
+
+/* ── Mock review: per-section table + wrong-only filter ── */
+.mock-table { width: 100%; margin: 24px 0 0; border-collapse: collapse; font-size: 14px; }
+.mock-table th,
+.mock-table td { padding: 9px 8px; text-align: left; vertical-align: baseline; border-bottom: 1px solid var(--rule); }
+.mock-table th:first-child { padding-left: 0; }
+.mock-table thead th { font: 600 12px var(--font-ui); color: var(--ink-2); border-bottom: 1px solid var(--ink); }
+.mock-table tbody th { font-weight: 500; }
+.mock-table__id { margin-right: 4px; font-size: 12px; font-weight: 600; color: var(--ink-3); }
+.mock-table .mock-table__num {
+  width: 4.5em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.mock-table tr.is-weak td:nth-child(3) { color: var(--pen); font-weight: 600; }
+.mock-table td.is-over { color: var(--pen); }
+.mock-table__note { margin: 8px 0 0; font-size: 12px; color: var(--ink-3); }
+
+.review__filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-top: 36px;
+}
+.review__filter-text { margin: 0; font-size: 14px; color: var(--ink-2); }
+
+/* Desktop and iPad landscape: heading and counts beside the card. */
+@media (min-width: 1000px) {
+  .deck {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 0 56px;
+  }
+  .deck__aside { position: sticky; top: 76px; }
+  .deck__stage, .deck-boxes { margin-top: 0; }
+  .deck__body > :first-child { margin-top: 0; }
+}
+
+@media print {
+  .palette, .mock__foot, .deck__grades, .review__filter .toggle { display: none !important; }
+}

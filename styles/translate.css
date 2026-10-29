@@ -1,0 +1,125 @@
+/* translate.css: the on-demand English layer (DESIGN.md section 8; js/translate.js, js/render/gloss.js).
+   Ink on paper, 1px --rule border, no shadow, no gradient, radius 4px or less.
+   Word: .gloss-word (dotted ink underline) + .gloss-tip tooltip. Line: .line-en under a sentence or UI line.
+   html.gloss-off (the 주석 toggle) hides both: no underline, no tooltip, no lines.
+   Text contrast (light / dark): --ink 15.6 / 14.0, --ink-2 8.0 / 8.3, --ink-3 4.8 / 5.1 on --paper. */
+
+/* ── Word ───────────────────────────────────────────── */
+.gloss-run { display: inline; }   /* one wrapped text node (js/translate.js) */
+
+.gloss-word {
+  cursor: help;
+  border-radius: var(--radius-sm);
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--ink-3);
+  text-underline-offset: 0.3em;
+  transition: text-decoration-color var(--fast) ease-out;
+}
+.gloss-word:hover,
+.gloss-word:focus-visible { text-decoration-color: var(--ink); }
+/* iOS Safari sends a tap on a plain span to the page's click listener only when it looks clickable. */
+@media (hover: none) { .gloss-word { cursor: pointer; } }
+
+/* Inside a control the word keeps the control's own look (hover shows the tooltip; a tap presses). */
+a .gloss-word,
+button .gloss-word,
+summary .gloss-word,
+label .gloss-word {
+  cursor: inherit;
+  text-decoration: none;
+}
+
+.gloss-off .gloss-word {
+  cursor: inherit;
+  text-decoration: none;
+}
+
+/* ── Tooltip ────────────────────────────────────────── */
+.gloss-tip {
+  position: fixed;
+  left: var(--tt-x, 0);
+  top: var(--tt-y, 0);
+  z-index: 50;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-width: min(300px, calc(100vw - 16px));
+  padding: 6px 10px;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  font: 400 13px/1.45 var(--font-ui);
+  pointer-events: none;
+}
+.gloss-tip__roman { font: italic 400 12px/1.4 var(--font-ui); color: var(--ink-3); }
+.gloss-tip__en { color: var(--ink); }
+.gloss-off .gloss-tip { display: none; }
+
+/* ── Line ───────────────────────────────────────────── */
+/* Long-press must not start iOS text selection or the callout menu on what it translates. */
+.sent,
+.ui-line,
+[data-sent-key],
+[data-line-en] {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.gloss-off .sent,
+.gloss-off .ui-line,
+.gloss-off [data-sent-key],
+.gloss-off [data-line-en] {
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.line-en {
+  display: block;
+  flex: 0 0 100%;          /* in a wrapping row of buttons: its own row */
+  grid-column: 1 / -1;     /* in a grid row: the full width */
+  max-width: var(--measure);
+  margin: 6px 0 10px;
+  padding: 6px 10px;
+  background: var(--paper);
+  color: var(--ink-2);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  font: 400 14px/1.55 var(--font-ui);
+  font-style: normal;
+  letter-spacing: normal;
+  text-align: left;
+  text-indent: 0;
+  text-transform: none;
+  white-space: normal;
+  word-break: normal;
+  cursor: auto;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.line-en b { font-weight: 700; color: var(--ink); }
+.line-en__note { display: block; margin-top: 4px; font-size: 13px; color: var(--ink-3); }
+
+/* A fold's summary is one flex row: the line goes under the row, after the +/- mark. */
+.fold__summary:has(> .line-en) { flex-wrap: wrap; }
+.fold__summary > .line-en { order: 1; }
+
+.gloss-off .line-en { display: none; }
+
+/* ── Master toggle (top bar) ────────────────────────── */
+.gloss-toggle[aria-pressed="true"] { color: var(--ink); border-color: var(--ink); }
+.gloss-toggle kbd { min-width: 1.4em; }
+@media (hover: none) { .gloss-toggle kbd { display: none; } }
+@media (max-width: 559px) { .gloss-toggle { order: 2; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .gloss-word { transition: none; }
+}
+
+@media print {
+  .line-en { border-color: #BBBBBB; }
+}
