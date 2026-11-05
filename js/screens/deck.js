@@ -1,7 +1,8 @@
 // deck.js: SRS review deck (#/deck, #/deck/then-sprint). Up to 8 due cards
 // (DeckCards.dueCards): front = word or grammar pattern + its question tag;
 // click / Space / Enter flips; 몰라요 (J, ←) and 알아요 (K, →) move the card's
-// Leitner box (SRS.record) once per card. The end line counts both answers;
+// Leitner box (SRS.record) once per card, flipped or not, and show the next card (the grade
+// buttons are locked for a moment after each grade, so a double-click cannot grade it). The end line counts both answers;
 // entered via then-sprint, the daily set continues to #/sprint on its own.
 // Markup: .deck__aside (heading, counts) + .deck__body (card or boxes), side by
 // side at 1000px and up.
@@ -12,16 +13,17 @@
   const { esc } = Util;
 
   const AUTO_SPRINT_MS = 600;
+  const GRADE_LOCK_MS = 350;
   const BOX_DAYS = [1, 2, 4, 8, 16];
 
-  // { root, cards, idx, flipped, results: { key: bool }, thenSprint, done, autoTimer }
+  // { root, cards, idx, flipped, results: { key: bool }, thenSprint, done, autoTimer, lockedUntil }
   let view = null;
 
   // ── Card faces ──
 
   function frontHtml(card) {
     return '<span class="flash__kr' + (card.kind === 'g' ? ' deck__pattern' : '') + '" lang="ko">' + esc(card.front) + '</span>' +
-      '<span class="flash__hint">' + (card.kind === 'g' ? '문법' : '어휘') + ' · 눌러서 뜻 보기</span>';
+      '<span class="flash__hint deck__kind">' + (card.kind === 'g' ? '문법' : '어휘') + '</span>';
   }
 
   function backHtml(card) {
@@ -54,11 +56,9 @@
       '<span class="deck__src num">Q' + esc(card.q) + '</span>' +
       (view.flipped ? backHtml(card) : frontHtml(card)) + '</button>' +
       '<div class="deck__grades">' +
-      '<button type="button" class="btn" data-grade="0" aria-keyshortcuts="J ArrowLeft">몰라요 <kbd>J</kbd></button>' +
-      '<button type="button" class="btn" data-grade="1" aria-keyshortcuts="K ArrowRight">알아요 <kbd>K</kbd></button>' +
-      '</div></div>' +
-      '<p class="keys-hint" aria-hidden="true"><kbd>Space</kbd> 뒤집기 · <kbd>J</kbd><kbd>←</kbd> 몰라요 · ' +
-      '<kbd>K</kbd><kbd>→</kbd> 알아요 · <kbd>Esc</kbd> 오늘</p></div></section>';
+      '<button type="button" class="btn btn--lg deck__no" data-grade="0" aria-keyshortcuts="J ArrowLeft">몰라요</button>' +
+      '<button type="button" class="btn btn--lg deck__yes" data-grade="1" aria-keyshortcuts="K ArrowRight">알아요</button>' +
+      '</div></div></div></section>';
   }
 
   // ── End + empty states ──
@@ -74,7 +74,7 @@
       : '<div class="set-card__actions"><a class="btn btn--primary btn--lg" href="#/sprint">스프린트 시작</a>' +
         '<a class="btn" href="#/today">오늘로</a></div>';
     return '<section class="deck deck--end"><div class="deck__aside">' + headHtml('복습 끝') + '</div>' +
-      '<div class="deck__body">' + line + next + '</div></section>';
+      '<div class="deck__body sheet">' + line + next + '</div></section>';
   }
 
   function boxRow(n, i, max) {
@@ -90,10 +90,9 @@
   function emptyHtml() {
     const st = window.SRS.stats();
     const max = Math.max(1, ...st.byBox);
-    const sub = '<p class="screen-sub">전체 <span class="num">' + st.total + '</span>장 · ' +
-      '틀리거나 애매했던 문제의 어휘와 문법이 여기에 쌓입니다</p>';
+    const sub = '<p class="screen-sub">전체 <span class="num">' + st.total + '</span>장</p>';
     return '<section class="deck deck--empty"><div class="deck__aside">' + headHtml('복습할 카드가 없습니다') + sub + '</div>' +
-      '<div class="deck__body"><ol class="deck-boxes" aria-label="상자별 카드 수 (상자 번호가 클수록 오래 기억한 카드)">' +
+      '<div class="deck__body sheet"><ol class="deck-boxes" aria-label="상자별 카드 수 (상자 번호가 클수록 오래 기억한 카드)">' +
       st.byBox.map((n, i) => boxRow(n, i, max)).join('') + '</ol>' +
       '<div class="set-card__actions deck__actions"><a class="btn" href="#/today">오늘로</a></div></div></section>';
   }
@@ -113,14 +112,22 @@
   }
 
   // One SRS.record per card: a repeated key or click on the same card is ignored.
+  // Works with or without flipping first (Fathul, 2026-10-29: the buttons looked dead on an
+  // unflipped card once the "tap to see the meaning" hint left the screen).
+  // After a grade the grade buttons are locked for GRADE_LOCK_MS: the next card is drawn under the
+  // same buttons, so a double-click or a quick second key would otherwise grade a card not yet seen.
   function grade(isRight) {
     if (!view || view.done) return;
-    if (!view.flipped) return; // grade only a card you have actually seen the back of
+    const now = Date.now();
+    if (now < view.lockedUntil) return;
     const card = view.cards[view.idx];
     if (!card || Object.prototype.hasOwnProperty.call(view.results, card.key)) return;
     window.SRS.record(card.key, isRight);
     const idx = view.idx + 1;
-    view = { ...view, results: { ...view.results, [card.key]: isRight }, idx, flipped: false, done: idx >= view.cards.length };
+    view = {
+      ...view, results: { ...view.results, [card.key]: isRight }, idx, flipped: false,
+      done: idx >= view.cards.length, lockedUntil: now + GRADE_LOCK_MS
+    };
     draw(view.done ? '.deck__summary + .set-card__actions .btn' : '.deck__card');
     if (view.done && view.thenSprint) {
       view = { ...view, autoTimer: setTimeout(() => location.replace('#/sprint'), AUTO_SPRINT_MS) };
@@ -144,6 +151,8 @@
     if (!view) return false;
     if (e.key === 'Escape') { location.hash = '#/today'; return true; }
     if (view.done || !view.cards.length) return false;
+    // A held-down key must not flip or grade again (the app's key handler drops repeats too).
+    if (e.repeat) return false;
     if (e.key === 'Enter' || e.key === ' ') {
       // A focused card or button flips / grades by its own native click.
       if (Util.isControlTarget(e.target)) return false;
@@ -161,7 +170,7 @@
     const thenSprint = !!params && params.arg === 'then-sprint';
     const cards = window.DeckCards.dueCards(Util.data().lessons, window.Store.get().settings);
     if (!cards.length && thenSprint) { view = null; location.replace('#/sprint'); return; }
-    view = { root, cards, idx: 0, flipped: false, results: {}, thenSprint, done: false, autoTimer: null };
+    view = { root, cards, idx: 0, flipped: false, results: {}, thenSprint, done: false, autoTimer: null, lockedUntil: 0 };
     root.addEventListener('click', onClick);
     if (!cards.length) { root.innerHTML = emptyHtml(); return; }
     draw();

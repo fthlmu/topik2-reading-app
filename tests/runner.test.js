@@ -76,6 +76,14 @@ function makeStorage() {
   assert.deepStrictEqual(s.pending, { chosen: 2, ms: 12000 });
   assert.strictEqual(s.shownAt, null);
   assert.strictEqual(RunCore.sprintChoose(s, 3, 15000), s, 'second pick ignored');
+  // Before 확실/애매 the pick can change; the first pick's time is kept.
+  const changed = RunCore.sprintRepick(s, 4);
+  assert.deepStrictEqual(changed.pending, { chosen: 4, ms: 12000 }, 'repick replaces the choice, keeps the time');
+  assert.strictEqual(RunCore.sprintRepick(changed, 4), changed, 'same choice: unchanged');
+  const fresh = RunCore.sprintShow(Session.createSlot([16], 0), 1);
+  assert.strictEqual(RunCore.sprintRepick(fresh, 2), fresh, 'no repick without a pending pick');
+  const ratedChanged = RunCore.sprintRate(changed, L(16), true, 'T0');
+  assert.strictEqual(ratedChanged.answers[0].chosen, 4, 'the changed pick is the one stored');
   const rated = RunCore.sprintRate(s, L(16), false, 'T1');
   assert.strictEqual(rated.idx, 1);
   assert.strictEqual(rated.pending, null);
@@ -154,6 +162,68 @@ try {
       id: slot.id, at: run.at, mode: 'sprint', qs: [16, 17, 18], right: 2, total: 3, overtimeCount: 1, durationMs: 130000
     });
   }
+
+  // 5b. A finished session id is final. A stale tab finishing the same blank mock later must not
+  // add answers (nor deck cards): the saved session says 0 right and Review would count more.
+  {
+    ls.clear();
+    Store.resetCache();
+    Store.load();
+    SRS._useStorage(makeStorage());
+    const slot = RunCore.mockCreate([16, 17], 1000);
+    Store.setSprint(slot);
+    const deps = { Store, SRS, lessons: LESSONS };
+    const blank = { id: slot.id, mode: 'mock', qs: slot.qs, answers: [], total: 2, durationMs: 5000, at: 'T0' };
+    assert.strictEqual(RunCore.record(blank, deps), '#/review/' + slot.id);
+    assert.strictEqual(Store.get().attempts.length, 0, 'nothing answered, nothing stored');
+    assert.strictEqual(Store.getSprint(), null);
+    const wrong16 = (L(16).answer % 4) + 1;
+    const late = { ...blank, answers: [{ q: 16, chosen: wrong16, correct: false, sure: null, ms: 9000, at: 'T1' }], at: 'T2' };
+    assert.strictEqual(RunCore.record(late, deps), '#/review/' + slot.id, 'still points at the same review');
+    assert.strictEqual(Store.get().attempts.length, 0, 'the later finish adds no attempts');
+    assert.strictEqual(Store.get().sessions.length, 1);
+    assert.deepStrictEqual(Store.get().sessions[0], {
+      id: slot.id, at: 'T0', mode: 'mock', qs: slot.qs, right: 0, total: 2, overtimeCount: 0, durationMs: 5000
+    });
+    assert.strictEqual(SRS.stats().total, 0, 'and seeds no deck cards');
+    // A different run is not touched by the late finish.
+    const other = Session.createSlot([1], 5);
+    Store.setSprint(other);
+    RunCore.record(late, deps);
+    assert.strictEqual(Store.getSprint().id, other.id);
+  }
+
+  // 5c. The tab's copy after a save: it keeps its own (newer) content, takes the stored revision,
+  // and saved time never goes backwards (the revision-checked save itself is in store.test.js 20,
+  // the async save and the cross-tab lock in xtab.test.js).
+  {
+    ls.clear();
+    Store.resetCache();
+    Store.load();
+    const made = Store.setSprint(RunCore.mockCreate([16, 17, 18], 1000)).sprint;
+    assert.strictEqual(RunCore.revOf(made), 0);
+    assert.strictEqual(RunCore.revOf({ rev: 4 }), 4);
+    assert.strictEqual(RunCore.revOf({ rev: -1 }) + RunCore.revOf({ rev: 1.5 }) + RunCore.revOf(null), 0);
+    const mine = RunCore.mockAnswer({ ...made, spent: [5, 0, 0] }, 2, L(16), 1000 + 4000);   // typed ahead of the save
+    const saved = Store.saveRun({ ...made, spent: [9, 7, 0] });                                // what reached storage
+    const kept = RunCore.accepted(mine, { ...saved.slot, rev: 3, spent: [9, 7, 1] });
+    assert.strictEqual(kept.answers[0].chosen, 2, 'own content kept');
+    assert.strictEqual(kept.rev, 3, 'stored revision taken');
+    assert.deepStrictEqual(kept.spent, [Math.max(mine.spent[0], 9), 7, 1], 'time only grows');
+    assert.strictEqual(RunCore.accepted(kept, { ...saved.slot, rev: 1 }).rev, 3, 'a lower revision never wins');
+    assert.strictEqual(RunCore.accepted(mine, { ...saved.slot, id: 'other', rev: 9 }), mine, 'another run is ignored');
+    assert.strictEqual('rev' in RunCore.accepted(made, saved.slot), false, 'revision 0 stays absent');
+    assert.strictEqual(mine.rev, undefined, 'the inputs are not changed');
+
+    // A mock is finished from the STORED slot with this tab's clock folded in; no clock is left running.
+    const stored = { ...saved.slot, spent: [3, 40, 0], shownAt: 777, answers: [null, null, null] };
+    const finalSlot = RunCore.mockFinalSlot(stored, { ...mine, shownAt: null, spent: [100, 10, 0] });
+    assert.deepStrictEqual(finalSlot.spent, [100, 40, 0], 'larger time per question');
+    assert.deepStrictEqual(finalSlot.answers, stored.answers, 'the stored answers, not this tab\'s');
+    assert.strictEqual(finalSlot.shownAt, null);
+    assert.strictEqual(RunCore.mockFinalSlot(null, mine), mine, 'nothing stored: this tab\'s copy');
+    assert.strictEqual(RunCore.mockFinalSlot({ ...stored, id: 'other' }, mine), mine);
+  }
 } finally {
   global.window.localStorage = prevWindowLS;
   global.localStorage = prevGlobalLS;
@@ -205,6 +275,24 @@ try {
   assert.strictEqual(res[0].ms, 50000, 'result ms = total time on the question');
   const sum = RunCore.summaryOf({ id: m.id, mode: 'mock', qs, answers: res, total: qs.length, durationMs: 60000, at: 'x' }, L);
   assert.deepStrictEqual([sum.mode, sum.total, sum.right, sum.durationMs], ['mock', 46, res[0].correct ? 1 : 0, 60000]);
+}
+
+// 6b. A hidden tab: the question's clock stops, the 70-minute deadline does not move.
+{
+  const T0 = 5000000;
+  const qs = RunCore.mockQuestions(LESSONS);
+  const start = RunCore.mockResume(RunCore.mockCreate(qs, T0), T0);
+  const hidden = RunCore.mockVisibility(start, false, T0 + 1000);   // 1 s on the question, then hidden
+  assert.deepStrictEqual([hidden.spent[0], hidden.shownAt], [1000, null]);
+  assert.strictEqual(RunCore.mockVisibility(hidden, false, T0 + 5000), hidden, 'hidden twice: unchanged');
+  assert.strictEqual(RunCore.mockFold(hidden, T0 + 600000), hidden, 'periodic saves add nothing while hidden');
+  const back = RunCore.mockVisibility(hidden, true, T0 + 601000);   // ten minutes later
+  assert.deepStrictEqual([back.spent[0], back.shownAt], [1000, T0 + 601000]);
+  assert.strictEqual(RunCore.mockVisibility(back, true, T0 + 602000), back, 'visible twice: unchanged');
+  const answered = RunCore.mockAnswer(back, 2, L(qs[0]), T0 + 602000);
+  assert.strictEqual(answered.answers[0].ms, 2000, 'answer time = 1 s before + 1 s after, not 602 s');
+  assert.strictEqual(answered.deadline, start.deadline, 'the countdown is wall clock: deadline unchanged');
+  assert.ok(RunCore.mockTimeUp(back, start.deadline) && !RunCore.mockTimeUp(back, start.deadline - 1));
 }
 
 // 7. Mock countdown reaching 0: time up, answers refused, time capped at the deadline.

@@ -1,9 +1,10 @@
-// today.js: home (#/today), drawn as the answer card on the desk.
-// Date line; a printed card panel with the exam countdown as digit columns
-// and today's set (one oval per question: hollow to start, your marks once
-// done, filled as you go while a sprint is open) with 시작 / 덱만 보기;
-// rule-separated rows for the deck, the last session and weak sections;
-// then the 50-question progress card (MapScreen.html({ compact: true })).
+// today.js: home (#/today). The hero card is the focal point: the date and exam date,
+// the exam countdown as the H1, today's set line, today's questions as numbered tiles
+// (untried to start, tinted as you go while a sprint is open, graded once done), meta
+// chips with real numbers (progress, accuracy, streak), then 시작 / 덱만 보기. Beside it a
+// white sheet with the deck, the last session and weak sections; below, the 50-question
+// palette (MapScreen.html({ compact: true })). At the very bottom, a quiet 기록 초기화 control opens a
+// confirm + PIN dialog (js/screens/reset-dialog.js) that deletes all progress.
 // context() gathers data; each *Part renders one block from it. The freshly
 // picked set is kept in `pick` so 시작 starts exactly the questions the time
 // estimate was made for. With cards due, 시작 runs the deck first
@@ -12,21 +13,24 @@
   'use strict';
 
   const Util = (typeof window !== 'undefined' && window.Util) || require('../util.js');
-  const { esc, EXAM_DATE, daysUntil, formatDateKr, toISODate, section, splitSectionLabel } = Util;
+  const { esc, EXAM_DATE, daysUntil, formatDateKr, toISODate, section, splitSectionLabel, total } = Util;
 
   const SET_SIZE = 5;
   const CARD_SEC = 15;
-  const TICKS = 10;
-  const MAX_SET_OVALS = 10;
+  const MAX_SET_TILES = 10;
 
   let view = null; // { root, pick: number[] }
 
-  const Omr = () => window.Omr;
+  const T = () => window.Tiles;
 
-  function countdownText(days) {
-    if (days > 0) return '시험까지 ' + days + '일';
-    if (days === 0) return '오늘 시험';
-    return '시험 끝';
+  // The H1 (Korean) and its English for the line layer and the EN switch.
+  function countdownHtml(days) {
+    if (days > 0) {
+      const en = days + (days === 1 ? ' day' : ' days') + ' until the exam';
+      return '<h1 class="hero__title" id="today-h1" data-ui-en="' + en + '" data-line-en="' + en + '">' +
+        '시험까지 <span class="num">' + days + '</span>일</h1>';
+    }
+    return '<h1 class="hero__title" id="today-h1">' + (days === 0 ? '오늘 시험' : '시험 끝') + '</h1>';
   }
 
   // A streak counts only while its last day is today or yesterday.
@@ -48,9 +52,7 @@
     return sec ? splitSectionLabel(sec.label).text : '';
   }
 
-  // ── Date line ──
-
-  // The date's line translation ("Thursday, October 29, 2026"), built here, never printed.
+  // The date's English ("Thursday, October 29, 2026"), built here, never printed in Korean mode.
   function dateEn(now) {
     try {
       return now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -59,35 +61,24 @@
     }
   }
 
-  function datePart(ctx) {
-    const streak = ctx.streak
-      ? ' · <span class="today__streak"><span class="num">' + ctx.streak + '</span>일 연속</span>'
-      : '';
-    return '<h1 class="sr-only">' + esc(countdownText(ctx.days)) + '</h1>' +
-      '<p class="today__date"><span data-line-en="' + esc(dateEn(ctx.now)) + '">' + esc(formatDateKr(ctx.now)) +
-      '</span> · TOPIK II 읽기 · 시험일 <span class="num">' +
-      esc(EXAM_DATE) + '</span>' + streak + '</p>';
+  // ── Hero ──
+
+  function factLine(ctx) {
+    const en = esc(dateEn(ctx.now));
+    return '<p class="hero__fact"><span data-line-en="' + en + '" data-ui-en="' + en + '">' +
+      esc(formatDateKr(ctx.now)) + '</span> · 시험일 <span class="num">' + esc(EXAM_DATE) + '</span></p>';
   }
 
-  // ── Card panel: countdown cell + set cell ──
-
-  function countCell(ctx) {
-    const body = ctx.days > 0
-      ? '<p class="plabel">시험까지</p><div class="today-card__count-row">' + Omr().digitColumns(ctx.days, 2) +
-        '<span class="today-card__unit" aria-hidden="true">일</span></div>'
-      : '<p class="today-card__over">' + esc(countdownText(ctx.days)) + '</p>';
-    return '<div class="today-card__cell today-card__count">' + body + '</div>';
-  }
-
-  function setOvals(states) {
-    if (!states.length || states.length > MAX_SET_OVALS) return '';
-    return '<div class="today-set__ovals" aria-hidden="true">' +
-      states.map((st, i) => Omr().oval(i + 1, st, 'md')).join('') + '</div>';
+  // Labelled so the numbers read as question numbers (Fathul asked, 2026-10-29).
+  function setTiles(qs, states) {
+    if (!qs.length || qs.length > MAX_SET_TILES) return '';
+    return '<p class="hero__label">오늘의 문제</p>' +
+      T().list({ items: qs.map((q, i) => T().tile({ n: q, state: states[i] })), cls: 'hero__set', attrs: ' aria-hidden="true"' });
   }
 
   function setLine(ctx, lead) {
     const deck = ctx.due ? ' · 복습 <span class="num">' + ctx.due + '</span>장' : '';
-    return '<p class="plabel">' + lead + deck + ' · 스프린트 <span class="num">' + ctx.pick.length +
+    return '<p class="hero__sub">' + lead + deck + ' · 스프린트 <span class="num">' + ctx.pick.length +
       '</span>문제 · 약 <span class="num">' + ctx.minutes + '</span>분</p>';
   }
 
@@ -101,18 +92,18 @@
     return '진행 중인 모의고사가 있습니다 · ' + time + '.';
   }
 
-  // Open sprint: answered (or picked, waiting for 확실/애매) questions are filled.
+  // Open sprint: answered (or picked, waiting for 확실/애매) questions are tinted.
   function resumeStates(slot) {
-    if (slot.mode === 'mock') return [];
-    return slot.qs.map((_, i) => (i < slot.answers.length || (i === slot.idx && slot.pending) ? 'fill' : ''));
+    return slot.qs.map((_, i) => (i < slot.answers.length || (i === slot.idx && slot.pending) ? 'answered' : 'untried'));
   }
 
-  function resumeCell(slot) {
+  // Each block: its lines and tiles, then the meta chips, then its actions.
+  function resumeBlock(slot, chips) {
     const isMock = slot.mode === 'mock';
     const at = isMock ? window.RunCore.mockAnsweredCount(slot) : Math.min(slot.idx + 1, slot.qs.length);
-    return '<div class="today-set__top"><p class="plabel">' + resumeLine(slot) + '</p>' +
-      setOvals(resumeStates(slot)) + '</div>' +
-      '<div class="set-card__actions" data-slot="resume-actions"><a class="btn btn--primary btn--lg" href="' +
+    return '<p class="hero__sub">' + resumeLine(slot) + '</p>' +
+      (isMock ? '' : setTiles(slot.qs, resumeStates(slot))) + chips +
+      '<div class="hero__actions" data-slot="resume-actions"><a class="btn btn--white btn--lg" href="' +
       (isMock ? '#/mock/run' : '#/sprint') + '">이어서 하기 ' +
       '<span class="num">(' + (isMock ? '답 ' : '') + at + ' / ' + slot.qs.length + ')</span></a>' +
       '<button type="button" class="btn btn--quiet" data-act="discard">버리고 새 세트</button></div>';
@@ -120,54 +111,60 @@
 
   // Second step of 버리고 새 세트: an inline yes/no, never window.confirm.
   function discardAskHtml() {
-    return '<p class="set-card__ask" role="status">진행 중인 답은 기록되지 않고 사라집니다. 버릴까요?</p>' +
-      '<button type="button" class="btn" data-act="discard-yes">버리기</button>' +
+    return '<p class="hero__ask" role="status">진행 중인 답은 기록되지 않고 사라집니다. 버릴까요?</p>' +
+      '<button type="button" class="btn btn--white" data-act="discard-yes">버리기</button>' +
       '<button type="button" class="btn btn--quiet" data-act="discard-no">취소</button>';
   }
 
   function deckLink() {
-    return '<a class="btn" href="#/deck">덱만 보기</a>';
+    return '<a class="btn btn--quiet" href="#/deck">덱만 보기</a>';
   }
 
-  function doneCell(ctx) {
+  function doneBlock(ctx, chips) {
     const d = ctx.done;
     const head = d.mode === 'mock' ? '오늘 모의고사 완료' : '오늘 세트 완료';
-    return '<div class="today-set__top"><p class="plabel">' + head + ' · 정답 <span class="num">' + d.right +
-      ' / ' + d.total + '</span></p>' + setOvals(d.states) + setLine(ctx, '한 세트 더') + '</div>' +
-      '<div class="set-card__actions"><button type="button" class="btn btn--lg" data-act="start">한 세트 더</button>' +
+    return '<p class="hero__sub">' + head + ' · 정답 <span class="num">' + d.right + ' / ' + d.total + '</span></p>' +
+      setTiles(d.qs, d.states) + setLine(ctx, '한 세트 더') + chips +
+      '<div class="hero__actions"><button type="button" class="btn btn--white btn--lg" data-act="start">한 세트 더</button>' +
       deckLink() + '</div>';
   }
 
-  function setCell(ctx) {
-    let body;
-    if (ctx.sprint) body = resumeCell(ctx.sprint);
-    else if (!ctx.pick.length) body = '<p class="plabel">풀 수 있는 문제가 없습니다.</p>';
-    else if (ctx.done) body = doneCell(ctx);
-    else {
-      body = '<div class="today-set__top">' + setLine(ctx, '오늘의 세트') + setOvals(ctx.pick.map(() => '')) + '</div>' +
-        '<div class="set-card__actions"><button type="button" class="btn btn--primary btn--lg" data-act="start">시작</button>' +
-        deckLink() + '</div>';
-    }
-    return '<div class="today-card__cell today-set">' + body + '</div>';
+  function setBlock(ctx, chips) {
+    if (ctx.sprint) return resumeBlock(ctx.sprint, chips);
+    if (!ctx.pick.length) return '<p class="hero__sub">풀 수 있는 문제가 없습니다.</p>' + chips;
+    if (ctx.done) return doneBlock(ctx, chips);
+    return setLine(ctx, '오늘의 세트') + setTiles(ctx.pick, ctx.pick.map(() => 'untried')) + chips +
+      '<div class="hero__actions"><button type="button" class="btn btn--white btn--lg" data-act="start">시작</button>' +
+      deckLink() + '</div>';
   }
 
-  function cardPart(ctx) {
-    return '<section class="omr-panel omr-panel--ticks today-card" aria-label="오늘의 세트">' +
-      Omr().ticks(TICKS) + '<div class="today-card__cells">' + countCell(ctx) + setCell(ctx) + '</div></section>';
+  function chip(value, label) {
+    return '<li class="hero-chip"><span class="hero-chip__n num">' + value + '</span>' +
+      '<span class="hero-chip__label">' + label + '</span></li>';
   }
 
-  // ── Rows: deck, last session, weak sections ──
+  // Real numbers only: questions seen, right among graded, the streak (each shown only when it exists).
+  function chipsHtml(ctx) {
+    const items = [chip(ctx.seen + ' / ' + total(), '진도')];
+    if (ctx.graded) items.push(chip(ctx.right + ' / ' + ctx.graded, '정답'));
+    if (ctx.streak) items.push(chip(ctx.streak + '일', '연속'));
+    return '<ul class="hero__chips">' + items.join('') + '</ul>';
+  }
+
+  function heroPart(ctx) {
+    return '<section class="hero today-hero" aria-labelledby="today-h1">' + factLine(ctx) +
+      countdownHtml(ctx.days) + setBlock(ctx, chipsHtml(ctx)) + '</section>';
+  }
+
+  // ── Side sheet: deck, last session, weak sections ──
 
   function rowHtml(label, body) {
     return '<div class="today-row"><h2 class="today-row__label">' + label + '</h2>' + body + '</div>';
   }
 
   function deckRow(ctx) {
-    const text = ctx.deckTotal
-      ? '<p class="today-row__text">복습 <span class="num">' + ctx.due + '</span>장 · 덱 전체 <span class="num">' +
-        ctx.deckTotal + '</span>장</p>'
-      : '<p class="today-row__text today-row__text--muted">비어 있습니다 · 틀리거나 애매했던 문제의 어휘가 쌓입니다</p>';
-    return rowHtml('복습 덱', text);
+    return rowHtml('복습 덱', '<p class="today-row__text">복습 <span class="num">' + ctx.due + '</span>장 · 덱 전체 <span class="num">' +
+      ctx.deckTotal + '</span>장</p>');
   }
 
   // Weakest section inside one session: lowest accuracy among its attempts.
@@ -199,10 +196,7 @@
   }
 
   function weakRow(ctx) {
-    if (!ctx.weak.length) {
-      return rowHtml('약한 유형', '<p class="today-row__text today-row__text--muted">' +
-        '한 유형을 2번 이상 풀면 정답률이 낮은 유형이 여기에 나옵니다.</p>');
-    }
+    if (!ctx.weak.length) return '';
     const items = ctx.weak.map(w =>
       '<li><a class="weak-list__link" href="#/map"><span class="weak-list__id">' + esc(w.id) + '</span>' +
       '<span class="weak-list__label" lang="ko">' + esc(sectionText(w.id)) + '</span>' +
@@ -211,28 +205,42 @@
     return rowHtml('약한 유형', '<ol class="weak-list">' + items + '</ol>');
   }
 
-  function listsPart(ctx) {
-    return '<section class="today-lists" aria-label="기록">' + deckRow(ctx) + lastRow(ctx) + weakRow(ctx) + '</section>';
+  function sidePart(ctx) {
+    return '<section class="sheet today-side" aria-label="기록">' + deckRow(ctx) + lastRow(ctx) + weakRow(ctx) + '</section>';
   }
 
   function mapPart() {
-    return '<section class="today-map" aria-labelledby="today-map-h"><div class="today-map__head">' +
-      '<h2 class="section-title" id="today-map-h">진도 · 1번 ~ 50번</h2>' + Omr().legend() + '</div>' +
-      window.MapScreen.html({ compact: true }) + '</section>';
+    return '<section class="sheet today-map" aria-labelledby="today-map-h">' +
+      '<h2 class="sheet-title" id="today-map-h">진도</h2>' + window.MapScreen.html({ compact: true }) + '</section>';
   }
 
-  const PARTS = [datePart, cardPart, listsPart, mapPart];
+  // The quiet 기록 초기화 control at the bottom, and its (closed) dialog: js/screens/reset-dialog.js.
+  function resetPart() {
+    return window.ResetDialog.html();
+  }
 
-  // Today's last finished session, with one mark per question (null if none today).
+  const PARTS = [heroPart, sidePart, mapPart, resetPart];
+
+  // Today's last finished session, with one tile state per question (null if none today).
   function doneToday(state, today) {
     const s = state.sessions.filter(x => toISODate(new Date(x.at)) === today).pop();
     if (!s) return null;
     const mine = state.attempts.filter(a => a.sessionId === s.id);
     const states = s.qs.map(q => {
       const list = mine.filter(a => a.q === q);
-      return Omr().single(Omr().markOfAttempt(list[list.length - 1]));
+      return T().stateOfAttempt(list[list.length - 1]);
     });
-    return { mode: s.mode, right: s.right, total: s.total, states };
+    return { mode: s.mode, right: s.right, total: s.total, qs: s.qs, states };
+  }
+
+  function cardCounts() {
+    const values = Object.values(window.Store.cardMap()).map(e => e.status);
+    const graded = values.filter(s => s !== 'untried' && s !== 'seen');
+    return {
+      seen: values.filter(s => s !== 'untried').length,
+      graded: graded.length,
+      right: graded.filter(s => s !== 'wrong').length
+    };
   }
 
   function context() {
@@ -254,7 +262,8 @@
       minutes: Math.ceil((window.Session.estimateSec(pick, data.lessons) + due * CARD_SEC) / 60),
       done: doneToday(state, today),
       last: window.Store.lastSession(),
-      weak: window.Store.weakestSections(3, 2)
+      weak: window.Store.weakestSections(3, 2),
+      ...cardCounts()
     };
   }
 
@@ -286,16 +295,29 @@
   }
 
   function discard() {
+    window.Store.claimTab();   // dropping the run is this tab's call: it is the writer from here
     window.Store.clearSprint();
     draw();
     focusAct('start');
+  }
+
+  // After the right PIN: the record is deleted, so draw Today again (0 / 50), focus the new control,
+  // then open the centered done pop-up (it returns focus to that control when it closes).
+  function resetDone() {
+    draw();
+    focusAct('reset-open');
+    window.ResetDialog.showDone(view.root);
   }
 
   const ACTIONS = {
     start,
     discard: askDiscard,
     'discard-yes': discard,
-    'discard-no': () => { draw(); focusAct('discard'); }
+    'discard-no': () => { draw(); focusAct('discard'); },
+    'reset-open': () => window.ResetDialog.open(view.root),
+    'reset-cancel': () => window.ResetDialog.cancel(view.root),
+    'reset-next': () => window.ResetDialog.next(view.root),
+    'reset-done-close': () => window.ResetDialog.closeDone(view.root)
   };
 
   function onClick(e) {
@@ -303,10 +325,24 @@
     if (act && ACTIONS[act.dataset.act]) ACTIONS[act.dataset.act]();
   }
 
+  // The PIN step is a form: Enter and the 초기화 button both arrive here.
+  function onSubmit(e) {
+    if (!view || !e.target.closest('[data-reset-form]')) return;
+    e.preventDefault();
+    if (window.ResetDialog.submit(view.root, { Store: window.Store, SRS: window.SRS })) resetDone();
+  }
+
+  // 'close' does not bubble: listen in the capture phase.
+  function onClose(e) {
+    if (view && e.target.matches && e.target.matches('[data-reset-dialog]')) window.ResetDialog.onClose(view.root);
+  }
+
   function mount(root) {
     view = { root, pick: [] };
     draw();
     root.addEventListener('click', onClick);
+    root.addEventListener('submit', onSubmit);
+    root.addEventListener('close', onClose, true);
   }
 
   function unmount() {
@@ -315,7 +351,7 @@
 
   const TodayScreen = {
     title: '오늘', mount, unmount,
-    parts: { datePart, cardPart, listsPart, mapPart }
+    parts: { heroPart, sidePart, mapPart }
   };
 
   if (typeof window !== 'undefined') window.TodayScreen = TodayScreen;

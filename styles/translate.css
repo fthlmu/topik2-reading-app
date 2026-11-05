@@ -1,24 +1,29 @@
 /* translate.css: the on-demand English layer (DESIGN.md section 8; js/translate.js, js/render/gloss.js).
-   Ink on paper, 1px --rule border, no shadow, no gradient, radius 4px or less.
-   Word: .gloss-word (dotted ink underline) + .gloss-tip tooltip. Line: .line-en under a sentence or UI line.
-   html.gloss-off (the 주석 toggle) hides both: no underline, no tooltip, no lines.
-   Text contrast (light / dark): --ink 15.6 / 14.0, --ink-2 8.0 / 8.3, --ink-3 4.8 / 5.1 on --paper. */
+   Word: .gloss-word (dotted underline) + .gloss-tip tooltip. Line: .line-en under a sentence or
+   UI line. Both are small white sheets (1px line border, radius 10, small shadow): they float
+   over the text they explain. html.gloss-off (the 주석 toggle) hides both.
+   English UI text from the 한 / EN switch (.ui-en, js/ui-lang.js) is plain text: no gloss. */
 
 /* ── Word ───────────────────────────────────────────── */
 .gloss-run { display: inline; }   /* one wrapped text node (js/translate.js) */
 
 .gloss-word {
   cursor: help;
-  border-radius: var(--radius-sm);
+  border-radius: 4px;
   text-decoration-line: underline;
   text-decoration-style: dotted;
   text-decoration-thickness: 1px;
-  text-decoration-color: var(--ink-3);
+  text-decoration-color: var(--line-strong);
   text-underline-offset: 0.3em;
-  transition: text-decoration-color var(--fast) ease-out;
+  transition: text-decoration-color var(--fast) ease-out, background-color var(--fast) ease-out;
 }
 .gloss-word:hover,
-.gloss-word:focus-visible { text-decoration-color: var(--ink); }
+.gloss-word:focus-visible { text-decoration-color: var(--brand-ink); background: var(--brand-50); }
+/* White text on the hero: a white underline and a translucent white hover, never a light fill. */
+.hero .gloss-word { text-decoration-color: rgba(255, 255, 255, 0.7); }
+.hero .gloss-word:hover,
+.hero .gloss-word:focus-visible { text-decoration-color: #FFFFFF; background: rgba(255, 255, 255, 0.16); }
+.hero :focus-visible { outline-color: #FFFFFF; }
 /* iOS Safari sends a tap on a plain span to the page's click listener only when it looks clickable. */
 @media (hover: none) { .gloss-word { cursor: pointer; } }
 
@@ -29,11 +34,13 @@ summary .gloss-word,
 label .gloss-word {
   cursor: inherit;
   text-decoration: none;
+  background: none;
 }
 
 .gloss-off .gloss-word {
   cursor: inherit;
   text-decoration: none;
+  background: none;
 }
 
 /* ── Tooltip ────────────────────────────────────────── */
@@ -41,21 +48,22 @@ label .gloss-word {
   position: fixed;
   left: var(--tt-x, 0);
   top: var(--tt-y, 0);
-  z-index: 50;
+  z-index: 80;
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   gap: 1px;
   max-width: min(300px, calc(100vw - 16px));
-  padding: 6px 10px;
+  padding: 8px 12px;
   background: var(--paper);
   color: var(--ink);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  font: 400 13px/1.45 var(--font-ui);
+  border: 1px solid var(--line);
+  border-radius: var(--r-tip);
+  box-shadow: var(--shadow-tip);
+  font: 500 14px/1.45 var(--font-ui);
   pointer-events: none;
 }
-.gloss-tip__roman { font: italic 400 12px/1.4 var(--font-ui); color: var(--ink-3); }
+.gloss-tip__roman { font: italic 400 13px/1.4 var(--font-ui); color: var(--muted); }
 .gloss-tip__en { color: var(--ink); }
 .gloss-off .gloss-tip { display: none; }
 
@@ -82,13 +90,13 @@ label .gloss-word {
   display: block;
   flex: 0 0 100%;          /* in a wrapping row of buttons: its own row */
   grid-column: 1 / -1;     /* in a grid row: the full width */
-  max-width: var(--measure);
   margin: 6px 0 10px;
-  padding: 6px 10px;
+  padding: 8px 12px;
   background: var(--paper);
-  color: var(--ink-2);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-sm);
+  color: var(--ink-soft);
+  border: 1px solid var(--line);
+  border-radius: var(--r-tip);
+  box-shadow: var(--shadow-tip);
   font: 400 14px/1.55 var(--font-ui);
   font-style: normal;
   letter-spacing: normal;
@@ -102,7 +110,9 @@ label .gloss-word {
   user-select: text;
 }
 .line-en b { font-weight: 700; color: var(--ink); }
-.line-en__note { display: block; margin-top: 4px; font-size: 13px; color: var(--ink-3); }
+.line-en__note { display: block; margin-top: 4px; font-size: 13px; color: var(--muted); }
+/* On the hero the line sits on blue: it keeps its own white sheet. */
+.hero .line-en { color: var(--ink-soft); }
 
 /* A fold's summary is one flex row: the line goes under the row, after the +/- mark. */
 .fold__summary:has(> .line-en) { flex-wrap: wrap; }
@@ -110,16 +120,10 @@ label .gloss-word {
 
 .gloss-off .line-en { display: none; }
 
-/* ── Master toggle (top bar) ────────────────────────── */
-.gloss-toggle[aria-pressed="true"] { color: var(--ink); border-color: var(--ink); }
-.gloss-toggle kbd { min-width: 1.4em; }
-@media (hover: none) { .gloss-toggle kbd { display: none; } }
-@media (max-width: 559px) { .gloss-toggle { order: 2; } }
-
 @media (prefers-reduced-motion: reduce) {
   .gloss-word { transition: none; }
 }
 
 @media print {
-  .line-en { border-color: #BBBBBB; }
+  .line-en { border-color: #BBBBBB; box-shadow: none; }
 }

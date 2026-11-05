@@ -1,8 +1,13 @@
 // srs.js - Leitner spaced-repetition boxes for the TOPIK II reading app.
 // Keys: "Q<num>:<kind>:<index>" (kind v = vocab, g = grammar). No DOM access.
 // Record: { box:1..5, due:'YYYY-MM-DD', seen, wrong, added:'YYYY-MM-DD' }
+// load() validates the stored deck: a root that is not an object, or a card that does not
+// match the record shape, is skipped. The raw value is copied to "topik2_srs.bak" first, then
+// the cleaned deck is written back (if the copy fails, the original is never overwritten).
+// If a write fails, the deck stays in memory for the page session (isPersistent() says false).
 (function () {
   var KEY = 'topik2_srs';
+  var BAK_KEY = 'topik2_srs.bak';
   var INTERVALS = [1, 2, 4, 8, 16];
   var MAX_BOX = INTERVALS.length;
 
@@ -27,21 +32,89 @@
     return fmtDate(new Date(p[0], p[1] - 1, p[2] + n));
   }
 
-  function load() {
-    try {
-      var raw = storage.getItem(KEY);
-      var obj = raw ? JSON.parse(raw) : {};
-      return obj && typeof obj === 'object' ? obj : {};
-    } catch (e) { return {}; }
-  }
-  function save(store) {
-    try { storage.setItem(KEY, JSON.stringify(store)); } catch (e) { /* degrade silently */ }
-  }
-
   function keyOf(q, kind, idx) { return 'Q' + q + ':' + kind + ':' + idx; }
   function parseKey(key) {
     var m = /^Q(\d+):([a-z]+):(\d+)$/.exec(String(key));
     return m ? { q: Number(m[1]), kind: m[2], idx: Number(m[3]) } : null;
+  }
+
+  // ── Validation: what a stored deck may contain ──
+
+  function isPlain(v) { return v !== null && typeof v === 'object' && !Array.isArray(v); }
+  function isCount(v) { return typeof v === 'number' && isFinite(v) && Math.floor(v) === v && v >= 0; }
+  function isDateStr(s) {
+    var m = typeof s === 'string' ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(s) : null;
+    if (!m) return false;
+    var y = Number(m[1]), mo = Number(m[2]) - 1, d = Number(m[3]);
+    var date = new Date(y, mo, d);
+    return date.getFullYear() === y && date.getMonth() === mo && date.getDate() === d;
+  }
+  function isCard(r) {
+    return isPlain(r) && isCount(r.box) && r.box >= 1 && r.box <= MAX_BOX &&
+      isDateStr(r.due) && isCount(r.seen) && isCount(r.wrong) && isDateStr(r.added);
+  }
+
+  // Keep the well-formed cards under well-formed keys. dropped = something was skipped.
+  function clean(parsed) {
+    var store = {}, dropped = !isPlain(parsed);
+    if (!dropped) {
+      Object.keys(parsed).forEach(function (k) {
+        if (parseKey(k) && isCard(parsed[k])) store[k] = parsed[k];
+        else dropped = true;
+      });
+    }
+    return { store: store, dropped: dropped };
+  }
+
+  // ── Storage ──
+
+  var blocked = false;    // a corrupt value could not be backed up: never overwrite it
+  var persistent = true;  // false once a write failed, until one goes through again
+  // When a write fails (storage full or blocked) or is held back, the deck stays in memory for this
+  // page session: grades and seeds are not lost, and every read returns it, as long as storage still
+  // holds the same string it was built on (if another tab changed it, or it was removed, storage wins).
+  var mem = null;         // the deck kept in memory
+  var memRaw = null;      // the stored string that deck is newer than
+  var lastRaw = null;     // the stored string the latest load() saw
+
+  // Corrupt value: copy it to KEY.bak, then write the cleaned deck. No copy, no write.
+  function keepBackup(raw, store) {
+    try { storage.setItem(BAK_KEY, raw); } catch (e) { blocked = true; return; }
+    blocked = false;
+    save(store);
+  }
+
+  function load() {
+    var raw;
+    try { raw = storage.getItem(KEY); } catch (e) { return mem || {}; }
+    var key = raw == null ? null : raw;
+    var keep = mem && key === memRaw ? mem : null;
+    if (!keep) mem = null;
+    lastRaw = key;
+    // Nothing stored: whatever was corrupt is gone, so writing is safe again.
+    if (raw == null || raw === '') { blocked = false; return keep || {}; }
+    var res;
+    try { res = clean(JSON.parse(raw)); } catch (e) { res = { store: {}, dropped: true }; }
+    var deck = keep || res.store;
+    if (res.dropped) keepBackup(raw, deck);
+    else blocked = false;
+    return deck;
+  }
+
+  function save(store) {
+    if (!blocked) {
+      try {
+        var raw = JSON.stringify(store);
+        storage.setItem(KEY, raw);
+        mem = null;
+        lastRaw = raw;
+        persistent = true;
+        return;
+      } catch (e) { /* kept in memory below */ }
+    }
+    mem = store;
+    memRaw = lastRaw;
+    persistent = false;
   }
 
   function fresh() {
@@ -98,12 +171,23 @@
     if (store[key]) { delete store[key]; save(store); }
   }
 
+  // 기록 초기화: empty the deck, in storage and in memory. If a corrupt value could not be backed up,
+  // the original is still not overwritten (the empty deck then lives in memory only). The .bak key stays.
+  function reset() {
+    load();
+    save({});
+  }
+
   var SRS = {
-    KEY: KEY, INTERVALS: INTERVALS, MAX_BOX: MAX_BOX,
+    KEY: KEY, BAK_KEY: BAK_KEY, INTERVALS: INTERVALS, MAX_BOX: MAX_BOX,
     keyOf: keyOf, parseKey: parseKey, seed: seed, seedMany: seedMany, record: record,
-    dueKeys: dueKeys, stats: stats, remove: remove,
+    dueKeys: dueKeys, stats: stats, remove: remove, reset: reset,
+    isPersistent: function () { return persistent; },
     _todayStr: todayStr, _addDays: addDays,
-    _useStorage: function (obj) { storage = obj || memoryStorage(); }
+    _useStorage: function (obj) {
+      storage = obj || memoryStorage();
+      blocked = false; persistent = true; mem = null; memRaw = null; lastRaw = null;
+    }
   };
   if (typeof window !== 'undefined') window.SRS = SRS;
   if (typeof module !== 'undefined') module.exports = SRS;

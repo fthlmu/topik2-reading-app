@@ -1,26 +1,23 @@
 // review.js: results of one sprint or mock (#/review/<sessionId>; no id = latest).
-// Sprint: header totals + a results strip (one answer-card row per question,
-// graded in red pen), then one block per question in order:
-// strategy card, glossed passage, red-pen choices, explanation (chosen
-// distractor first), vocab chips, link to Study. Footer: retry wrong ones.
-// Mock (session.mode 'mock', see review-mock.js): score over every question,
-// per-section table, then blocks for wrong or blank questions only (모두 보기).
+// A centred result sheet: title, time stamp, three tinted tiles (점수 in points, 정답률,
+// 맞힌 문제), the time line, the 로마자 toggle and one numbered tile per question (graded
+// colour, time underneath; a tile jumps to its block). Then one question sheet per
+// question in order: ※ instruction (first of its group), question line, verdict and time,
+// glossed passage, graded choices, explanation (chosen distractor first), strategy card,
+// vocab chips, link to Study. Footer: retry wrong ones.
+// Mock (session.mode 'mock', see review-mock.js): the same result sheet over every question,
+// a per-section table, then blocks for wrong or blank questions only (모두 보기).
 // Romanization (choices + chips) follows settings.romanization; the header
 // toggle flips it via a class on the screen root (no re-render).
 (function () {
   'use strict';
 
   const Util = (typeof window !== 'undefined' && window.Util) || require('../util.js');
-  const { esc, richText, circled, section, splitSectionLabel, formatTime } = Util;
+  const { esc, richText, circled, formatTime } = Util;
 
   let view = null; // { root, session, rows: [{ q, lesson, attempt }], isMock, showAll }
 
   const PACE = () => window.PACE;
-
-  function sectionText(id) {
-    const sec = section(id);
-    return sec ? splitSectionLabel(sec.label).text : '';
-  }
 
   function isOver(row) {
     return Number.isFinite(row.attempt.ms) && PACE().isOver(row.attempt.ms, row.lesson.section);
@@ -48,42 +45,73 @@
     return '<button type="button" class="toggle" data-act="toggle-roman" aria-pressed="' + romanOn + '">로마자</button>';
   }
 
-  function headHtml(session, t, romanOn) {
+  function stampOf(session) {
     const when = new Date(session.at);
-    const stamp = isNaN(when) ? '' : (when.getMonth() + 1) + '월 ' + when.getDate() + '일 ' + formatTime(when);
-    const pct = t.total ? Math.round((100 * t.right) / t.total) : 0;
-    return '<header class="screen-head review__head">' +
-      '<div class="review__titles"><p class="eyebrow">스프린트 결과 · ' + esc(stamp) + '</p>' +
-      '<h1 class="screen-title">결과 <span class="num">' + t.right + ' / ' + t.total + '</span> ' +
-      '<span class="review__pct num">' + pct + '%</span></h1>' +
-      '<p class="screen-sub">시간 <span class="num">' + esc(PACE().fmt(t.usedMs)) + '</span> / 기준 ' +
+    return isNaN(when) ? '' : (when.getMonth() + 1) + '월 ' + when.getDate() + '일 ' + formatTime(when);
+  }
+
+  // The stamp's English for the 한 / EN switch ("Oct 29, 15:26").
+  function stampEn(session) {
+    const when = new Date(session.at);
+    if (isNaN(when)) return '';
+    try {
+      return when.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' + formatTime(when);
+    } catch (err) {
+      return formatTime(when);
+    }
+  }
+
+  // Points earned / points possible, each question's points from its group instruction.
+  function scoreOf(rows) {
+    const pts = r => window.Tiles.points(r.lesson);
+    return {
+      got: rows.filter(r => r.attempt.correct).reduce((s, r) => s + pts(r), 0),
+      max: rows.reduce((s, r) => s + pts(r), 0)
+    };
+  }
+
+  // Three flat tinted tiles: 점수 (blue), 정답률 (green), 맞힌 문제 (amber). Real values only.
+  function statsHtml(rows) {
+    const right = rows.filter(r => r.attempt.correct).length;
+    const pct = rows.length ? Math.round((100 * right) / rows.length) : 0;
+    const s = scoreOf(rows);
+    const stat = (cls, label, value) => '<li class="stat stat--' + cls + '"><span class="stat__label">' + label +
+      '</span><span class="stat__value num">' + value + '</span></li>';
+    return '<ul class="stats">' + stat('score', '점수', s.got + ' / ' + s.max) + stat('pct', '정답률', pct + '%') +
+      stat('right', '맞힌 문제', right + ' / ' + rows.length) + '</ul>';
+  }
+
+  // o = { title, session, stamp, rows, sub (HTML), toggle (HTML) }
+  function resultHtml(o) {
+    return '<header class="sheet result">' +
+      '<h1 class="result__title">' + o.title + '</h1>' +
+      (o.stamp ? '<p class="result__stamp num"><span data-ui-en="' + esc(stampEn(o.session)) + '">' +
+        esc(o.stamp) + '</span></p>' : '') +
+      statsHtml(o.rows) + '<p class="result__sub">' + o.sub + '</p>' +
+      '<div class="result__tools">' + o.toggle + '</div>' + stripHtml(o.rows) + '</header>';
+  }
+
+  function headHtml(session, rows, t, romanOn) {
+    const sub = '시간 <span class="num">' + esc(PACE().fmt(t.usedMs)) + '</span> / 기준 ' +
       '<span class="num">' + esc(PACE().fmt(t.paceMs)) + '</span> · 시간 초과 <span class="num">' + t.over +
-      '</span> · 애매 <span class="num">' + t.unsure + '</span></p></div>' + romanToggleHtml(romanOn) + '</header>';
+      '</span> · 애매 <span class="num">' + t.unsure + '</span>';
+    return resultHtml({ title: '스프린트 결과', session, stamp: stampOf(session), rows, sub, toggle: romanToggleHtml(romanOn) });
   }
 
-  // The question's answer-card row: your fill with the red-pen mark, red ○ on the right answer.
-  function marksHtml(row) {
-    const Omr = window.Omr;
-    const a = row.attempt;
-    return Omr.row({ q: row.q, cells: Omr.cells(Omr.markOfAttempt(a), a.chosen, row.lesson.answer) });
-  }
-
+  // One numbered tile per question (graded colour) with its time underneath; a tile jumps to its block.
   function cellHtml(row) {
     const a = row.attempt;
     const over = isOver(row);
-    const unsure = a.sure === false;
-    const flags = (over ? '<span aria-hidden="true">+</span><span class="sr-only">시간 초과</span>' : '') +
-      (unsure ? '<span aria-hidden="true">?</span><span class="sr-only">애매</span>' : '');
-    return '<li><a class="result ' + (a.correct ? 'is-right' : 'is-wrong') + '" href="#rq-' + row.q + '" ' +
-      'data-jump="' + row.q + '"><span class="result__top">' +
-      '<span class="result__q num">Q' + row.q + '</span>' +
-      '<span class="sr-only">' + (a.correct ? '정답' : '오답') + '</span>' +
-      '<span class="result__time num">' + esc(timeText(a.ms)) + '</span>' +
-      '<span class="result__flags num">' + flags + '</span></span>' + marksHtml(row) + '</a></li>';
+    const verdict = a.unanswered ? '미응답' : a.correct ? '정답' : '오답';
+    const label = row.q + '번 · ' + verdict + (a.sure === false ? ' · 애매' : '') + (over ? ' · 시간 초과' : '');
+    return '<li>' + window.Tiles.tile({
+      n: row.q, state: window.Tiles.stateOfAttempt(a), tag: 'a',
+      attrs: ' href="#rq-' + row.q + '" data-jump="' + row.q + '" aria-label="' + esc(label) + '"'
+    }) + '<span class="tile-time num' + (over ? ' is-over' : '') + '" aria-hidden="true">' + esc(timeText(a.ms)) + '</span></li>';
   }
 
   function stripHtml(rows) {
-    return '<ol class="results" aria-label="문항별 결과">' + rows.map(cellHtml).join('') + '</ol>';
+    return '<ol class="tiles result-strip" aria-label="문항별 결과">' + rows.map(cellHtml).join('') + '</ol>';
   }
 
   // ── Per-question block ──
@@ -139,36 +167,43 @@
       '<ul class="chips">' + chips + '</ul></div>';
   }
 
-  function verdictText(a) {
-    const mark = window.Omr.oval('', window.Omr.single(window.Omr.markOfAttempt(a)));
-    if (a.unanswered) return mark + '미응답';
-    return mark + (a.correct ? '정답' : '오답');
+  function verdictChip(a) {
+    if (a.unanswered) return '<span class="state state--none">미응답</span>';
+    return a.correct
+      ? '<span class="state state--good">정답</span>'
+      : '<span class="state state--bad">오답</span>';
   }
 
   function metaHtml(row) {
     const a = row.attempt;
     const budget = PACE().secFor(row.lesson.section) * 1000;
-    return '<p class="rq__meta"><span class="rq__verdict ' + (a.correct ? 'is-right' : 'is-wrong') + '">' +
-      verdictText(a) + '</span> · <span class="num">' + esc(timeText(a.ms)) + ' / ' +
-      esc(PACE().fmt(budget)) + '</span>' + (isOver(row) ? ' · <span class="rq__over">시간 초과</span>' : '') +
-      (a.sure === false ? ' · 애매' : '') + '</p>';
+    return '<p class="rq__meta">' + verdictChip(a) +
+      (a.sure === false ? ' <span class="state state--unsure">애매</span>' : '') +
+      ' <span class="num">' + esc(timeText(a.ms)) + ' / ' + esc(PACE().fmt(budget)) + '</span>' +
+      (isOver(row) ? ' · <span class="rq__over">시간 초과</span>' : '') + '</p>';
   }
 
-  function blockHtml(row) {
+  // first: the first block of its ※ group in this list, so it carries the group instruction.
+  function blockHtml(row, first) {
     const { q, lesson: l, attempt: a } = row;
     // Blank mock questions were never read, so they are not seeded into the deck.
     const needsWork = (!a.correct && !a.unanswered) || a.sure === false;
-    return '<section class="rq" id="rq-' + q + '" tabindex="-1" aria-labelledby="rq-' + q + '-h">' +
-      '<header class="rq__head"><h2 class="rq__title" id="rq-' + q + '-h"><span class="num">Q' + q + '</span> · ' +
-      esc(l.section) + ' 묶음 · <span lang="ko">' + esc(sectionText(l.section)) + '</span></h2>' +
-      metaHtml(row) + '</header>' +
-      strategyHtml(l.section, !a.correct) +
-      window.Passage.instruction(l) +
+    return '<section class="sheet qsheet rq" id="rq-' + q + '" tabindex="-1" aria-labelledby="rq-' + q + '-h">' +
+      (first ? window.Passage.instruction(l) : '') +
+      window.Tiles.questionLine(l, { level: 2, id: 'rq-' + q + '-h' }) + metaHtml(row) +
       '<div class="rq__passage" aria-label="지문">' + window.Passage.renderFull(l, { glossOn: true }) + '</div>' +
       '<div class="rq__choices">' + window.Choices.render(l, { variant: 'review', chosen: a.chosen, sure: a.sure }) + '</div>' +
-      explainHtml(l, a.chosen) + vocabHtml(l, needsWork) +
-      '<p class="rq__study"><a href="#/study/' + q + '">공부하기 <span aria-hidden="true">→</span></a></p>' +
+      explainHtml(l, a.chosen) + strategyHtml(l.section, !a.correct) + vocabHtml(l, needsWork) +
+      '<p class="rq__study"><a class="btn" href="#/study/' + q + '">공부하기</a></p>' +
       '</section>';
+  }
+
+  function groupOf(row) {
+    return (row.lesson.groupInstruction || {}).kr || '';
+  }
+
+  function blocksOf(rows) {
+    return rows.map((r, i) => blockHtml(r, i === 0 || groupOf(rows[i - 1]) !== groupOf(r))).join('');
   }
 
   // Questions to redo: answered wrong (a blank mock question was never read).
@@ -199,13 +234,15 @@
   }
 
   function notFoundHtml() {
-    return '<section class="placeholder"><h1 class="screen-title">리뷰할 세트가 없습니다</h1>' +
+    return '<section class="sheet placeholder"><h1 class="screen-title">리뷰할 세트가 없습니다</h1>' +
       '<p class="placeholder__note"><a href="#/today">오늘</a>에서 스프린트를 시작하세요.</p></section>';
   }
 
   // ── Actions ──
 
+  // Mock review lists wrong and blank questions only: a tile for a hidden block shows all first.
   function jump(q) {
+    if (!view.root.querySelector('#rq-' + q) && view.isMock && !view.showAll) toggleAll();
     const block = view.root.querySelector('#rq-' + q);
     if (!block) return;
     const smooth = !(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
@@ -221,8 +258,7 @@
   }
 
   function blocksHtml() {
-    const rows = view.isMock ? window.ReviewMock.visibleRows(view.rows, view.showAll) : view.rows;
-    return rows.map(blockHtml).join('');
+    return blocksOf(view.isMock ? window.ReviewMock.visibleRows(view.rows, view.showAll) : view.rows);
   }
 
   // Mock: wrong-only ⇄ every question; re-renders the block list in place.
@@ -265,11 +301,11 @@
     root.classList.toggle('is-roman', romanOn);
     const M = window.ReviewMock;
     const top = isMock
-      ? M.headHtml(session, rows, romanToggleHtml(romanOn)) + M.tableHtml(rows) +
-        '<div data-slot="filter">' + M.filterHtml(rows, false) + '</div>'
-      : headHtml(session, totals(rows), romanOn) + stripHtml(rows);
-    root.innerHTML = '<div class="review"><div class="review__side">' + top + '</div>' +
-      '<div class="review__main"><div data-slot="blocks">' + blocksHtml() + '</div>' + footHtml(rows) + '</div></div>';
+      ? resultHtml({ ...M.headInfo(session, rows), session, stamp: stampOf(session), rows, toggle: romanToggleHtml(romanOn) }) +
+        M.tableHtml(rows) + '<div data-slot="filter">' + M.filterHtml(rows, false) + '</div>'
+      : headHtml(session, rows, totals(rows), romanOn);
+    root.innerHTML = '<div class="review">' + top +
+      '<div data-slot="blocks">' + blocksHtml() + '</div>' + footHtml(rows) + '</div>';
     root.addEventListener('click', onClick);
   }
 

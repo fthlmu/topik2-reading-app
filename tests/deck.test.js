@@ -100,3 +100,55 @@ function memStore() {
   SRS._useStorage(memStore());
   assert.deepStrictEqual(DeckCards.dueCards(LESSONS), [], 'empty deck');
 }
+
+// 7. Deck screen grading: no flip needed, and a short lock after each grade so a double-click
+// (or a second key) cannot grade the next card, which was drawn under the same buttons unseen.
+{
+  global.window.Store = { get: () => ({ settings: {} }) };
+  global.window.SRS = SRS;
+  global.window.DeckCards = DeckCards;
+  const DeckScreen = require('../js/screens/deck.js');
+  const raw = {};
+  SRS._useStorage({
+    getItem: k => (k in raw ? raw[k] : null),
+    setItem: (k, v) => { raw[k] = String(v); },
+    removeItem: k => { delete raw[k]; }
+  });
+  SRS.seedMany(['Q16:v:0', 'Q16:v:1', 'Q16:v:2']);
+  const seen = () => Object.values(JSON.parse(raw[SRS.KEY])).filter(r => r.seen > 0).length;
+  const handlers = {};
+  const root = { innerHTML: '', addEventListener: (type, fn) => { handlers[type] = fn; }, querySelector: () => null };
+  const clickGrade = grade => handlers.click({
+    target: { closest: sel => (sel === 'button[data-grade]' ? { dataset: { grade } } : null) }
+  });
+  const press = (key, code, extra) => DeckScreen.onKey({ key, code, target: null, ...extra });
+
+  const realNow = Date.now;
+  let now = 5000000;
+  Date.now = () => now;
+  try {
+    DeckScreen.mount(root, { arg: null });
+    clickGrade('1');                       // 알아요 on a card that was never flipped
+    assert.strictEqual(seen(), 1, 'grades without flipping first');
+    now += 60;
+    clickGrade('1');                       // the second click of a double-click
+    press('k', 'KeyK');                    // and a quick key press
+    press('j', 'KeyJ');
+    assert.strictEqual(seen(), 1, 'inside the lock only the first card is graded');
+    now += 400;                            // lock over
+    press('k', 'KeyK', { repeat: true });  // a held key never grades
+    assert.strictEqual(seen(), 1, 'e.repeat ignored');
+    clickGrade('0');                       // 몰라요
+    assert.strictEqual(seen(), 2, 'a normal click after the lock grades the next card');
+    now += 400;
+    press('ArrowRight', 'ArrowRight');
+    assert.strictEqual(seen(), 3, 'last card');
+    now += 400;
+    press('k', 'KeyK');
+    clickGrade('1');
+    assert.strictEqual(seen(), 3, 'nothing left to grade after the end');
+  } finally {
+    Date.now = realNow;
+    DeckScreen.unmount();
+  }
+}

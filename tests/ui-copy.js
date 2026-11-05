@@ -7,6 +7,7 @@ global.window = global.window || {};
 require('../lessons.js');
 const GT = require('../js/gloss-text.js');
 const STRATEGIES = require('../js/strategies.js');
+const MapScreen = require('../js/screens/map.js');
 
 const ROOT = path.join(__dirname, '..');
 const SYLLABLE = /[가-힣]/;
@@ -110,6 +111,9 @@ function collect() {
     jsStrings(fs.readFileSync(path.join(ROOT, file), 'utf8')).forEach(s => piecesOf(s).forEach(p => add(p, file)));
   });
   Object.values(STRATEGIES).forEach(s => [s.title, ...(s.signals || [])].forEach(t => add(t, 'js/strategies.js')));
+  // A tile's status label is joined to other parts ("16번 · 정답 · 확실 · 고른 답 ③") and the page cuts
+  // that line at every middle dot or arrow, so each part of a status label needs its own entry too.
+  Object.values(MapScreen.STATUS_LABEL).forEach(l => l.split(/[·→]/).forEach(p => add(p, 'js/screens/map.js status')));
   const data = global.window.TOPIK2;
   data.sections.forEach(s => add(String(s.label).replace(/^\[[^\]]*\]\s*/, ''), 'lessons.js sections'));
   Object.values(data.lessons).forEach(l => add((l.groupInstruction || {}).kr || '', 'lessons.js groupInstruction'));

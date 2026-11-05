@@ -1,0 +1,243 @@
+/* controls.css: buttons, toggles, chips, the numbered square and its tiles, the test bar.
+   The numbered square (.sq) is the app's one motif: the gradient badge on every sheet.
+   Tiles (.tile) are the same square drawn flat in a state colour (Map, Today, Review, runs).
+   Gradient only on .sq and .btn--primary; tiles, chips and rows stay flat. */
+
+/* ── Buttons ────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 20px;
+  font: 700 15px/1.2 var(--font-ui);
+  color: var(--brand-ink);
+  background: var(--brand-50);
+  border: 1px solid var(--brand-100);
+  border-radius: var(--r-row);
+  text-decoration: none;
+  transition-property: background-color, color, border-color, box-shadow;
+  transition-duration: var(--fast);
+  transition-timing-function: ease-out;
+}
+.btn:hover { background: var(--brand-100); text-decoration: none; }
+.btn:active { background: var(--brand-100); box-shadow: inset 0 1px 2px rgba(16, 42, 67, 0.18); }
+.btn:disabled,
+.btn[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; background: var(--brand-50); }
+
+/* The one primary action of a screen: the blue gradient. */
+.btn--primary {
+  color: #FFFFFF;
+  background: linear-gradient(135deg, var(--grad-a), var(--grad-b));
+  border-color: transparent;
+  box-shadow: var(--lift-btn);
+}
+.btn--primary:hover { background: linear-gradient(135deg, var(--grad-b), var(--grad-b)); }
+.btn--primary:active { box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.25); }
+.btn--primary:disabled { background: linear-gradient(135deg, var(--grad-a), var(--grad-b)); }
+
+/* White: on the hero only. */
+.btn--white {
+  color: var(--on-white);
+  background: #FFFFFF;
+  border-color: #FFFFFF;
+}
+.btn--white:hover { background: #E8F2FC; border-color: #E8F2FC; }
+.btn--white:active { background: #D6E9FB; }
+
+/* Quiet: text-weight action next to a stronger one. */
+.btn--quiet {
+  color: var(--ink-soft);
+  background: transparent;
+  border-color: transparent;
+  padding-inline: 12px;
+}
+.btn--quiet:hover { color: var(--ink); background: var(--brand-50); }
+.hero .btn--quiet { color: #FFFFFF; }
+.hero .btn--quiet:hover { background: rgba(255, 255, 255, 0.14); }
+
+/* Danger: the one irreversible action of a dialog (the red state tokens, white text 5.4:1). */
+.btn--danger {
+  color: #FFFFFF;
+  background: var(--bad-fill);
+  border-color: transparent;
+}
+.btn--danger:hover { background: var(--bad-ink); }
+.btn--danger:active { background: var(--bad-ink); box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.25); }
+
+.btn--lg { min-height: 52px; padding: 13px 28px; font-size: 17px; }
+
+/* On/off chip (로마자, 모두 보기). */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 14px;
+  font: 600 14px var(--font-ui);
+  color: var(--ink-soft);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-row);
+  transition: background-color var(--fast) ease-out, border-color var(--fast) ease-out, color var(--fast) ease-out;
+}
+.toggle:hover { color: var(--ink); border-color: var(--brand-100); background: var(--brand-50); }
+.toggle[aria-pressed="true"] { color: var(--brand-ink); border-color: var(--brand); background: var(--brand-50); }
+
+/* ── Numbered square: the question badge ───────────── */
+.sq {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 6px;
+  font: 700 15px/1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+  color: #FFFFFF;
+  /* Reference blues; the dark stop comes at 55% so the digits sit on blue that passes 4.5:1
+     (the reference's 0 to 100% fade measured 4.21:1 behind the digits, a 70% stop 4.49:1). */
+  background: linear-gradient(135deg, var(--sq-a), var(--grad-b) 55%);
+  border-radius: 10px;
+  box-shadow: var(--lift-blue);
+}
+
+/* ── Tiles: one flat numbered square per question ──── */
+.tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tiles > li { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+
+.tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  font: 600 15px/1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sq);
+  transition: background-color var(--fast) ease-out, border-color var(--fast) ease-out, box-shadow var(--fast) ease-out;
+}
+.tile--answered { color: var(--brand-ink); background: var(--brand-50); border-color: var(--brand); }
+.tile--correct { color: var(--good-ink); background: var(--good-bg); border-color: var(--good); }
+.tile--wrong { color: var(--bad-ink); background: var(--bad-bg); border-color: var(--bad); }
+.tile--unsure { color: var(--amber-ink); background: var(--amber-bg); border-color: var(--amber-edge); }
+
+a.tile:hover,
+button.tile:hover { box-shadow: inset 0 0 0 1px currentColor; text-decoration: none; }
+a.tile:active,
+button.tile:active { box-shadow: inset 0 0 0 2px currentColor; }
+button.tile { padding: 0; font: 600 15px/1 var(--font-display); }
+
+/* The question on screen now: a heavier ring in the brand colour. */
+.tile.is-current,
+.tile[aria-current] { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--brand); font-weight: 700; }
+
+.tile--sm { width: 36px; height: 36px; font-size: 14px; }
+.tile-time { font: 500 12px/1 var(--font-display); color: var(--muted); }
+.tile-time.is-over { color: var(--bad-ink); font-weight: 700; }
+
+/* ── Chips ──────────────────────────────────────────── */
+/* Point chip: the one pill. */
+.pts {
+  flex: none;
+  padding: 5px 12px;
+  font: 600 13px/1.2 var(--font-display);
+  color: var(--brand-ink);
+  background: var(--brand-50);
+  border: 1px solid var(--brand-100);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/* State chip: 정답 · 오답 · 애매 · 미응답. */
+.state {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  font: 700 13px/1.4 var(--font-ui);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+.state--good { color: var(--good-ink); background: var(--good-bg); border-color: var(--good); }
+.state--bad { color: var(--bad-ink); background: var(--bad-bg); border-color: var(--bad); }
+.state--unsure { color: var(--amber-ink); background: var(--amber-bg); border-color: var(--amber-edge); }
+.state--none { color: var(--ink-soft); background: var(--paper); border-color: var(--line-strong); }
+
+/* ── Test bar (Sprint, Mock): sticky under the header ── */
+.runhead {
+  position: sticky;
+  top: var(--header-h);
+  z-index: 40;
+  margin: -12px 0 22px;
+  padding-top: 12px;
+  background: transparent;   /* a flat backing showed as a band over the desk glow; the reference has none */
+}
+.testbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  min-height: 56px;
+  padding: 8px 10px 8px 18px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-row);
+  box-shadow: var(--shadow-sheet);
+}
+.testbar__title { margin: 0; font: 700 16px/1.3 var(--font-display); color: var(--ink); }
+.testbar__right { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.testbar__count { margin: 0; font: 600 14px var(--font-ui); color: var(--muted); }
+.testbar__count .num { color: var(--ink); font-family: var(--font-display); }
+
+.timer {
+  margin: 0;
+  padding: 7px 14px;
+  font: 700 17px/1.2 var(--font-display);
+  font-variant-numeric: tabular-nums;
+  color: var(--brand-ink);
+  background: var(--brand-50);
+  border: 1px solid var(--brand-100);
+  border-radius: 10px;
+  transition: background-color var(--fast) ease-out, color var(--fast) ease-out;
+}
+.timer__of { font-weight: 500; }
+.timer.is-over { color: var(--bad-ink); background: var(--bad-bg); border-color: var(--bad); }
+.timer.is-low { color: var(--amber-ink); background: var(--amber-bg); border-color: var(--amber-edge); }
+
+/* 4px progress track: real progress through the run; width eases over 300ms. */
+.track {
+  height: 4px;
+  margin-top: 10px;
+  overflow: hidden;
+  background: var(--line);
+  border-radius: 99px;
+}
+.track__fill {
+  display: block;
+  height: 100%;
+  width: calc(var(--p, 0) * 100%);
+  background: linear-gradient(90deg, var(--brand), var(--grad-b));
+  border-radius: 99px;
+  transition: width 300ms ease-out;
+}
+
+@media (max-width: 559px) {
+  .testbar { padding-left: 14px; }
+  .timer { font-size: 16px; padding: 6px 10px; }
+}

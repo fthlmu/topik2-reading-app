@@ -3,26 +3,30 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="light dark">
+  <meta name="color-scheme" content="light">
   <title>TOPIK II 읽기 · 102회</title>
   <link rel="icon" href="data:,">
   <script>
-    // Apply a saved light/dark choice before first paint (no flash). Auto = no attribute.
+    // Before first paint (no flash): the 한 / EN choice. The app is light only (DESIGN.md
+    // section 4, option A), so no theme is read. English hides the header and screen until
+    // js/ui-lang.js has switched them; the timer is a safety net in case a script fails to load.
     (function () {
       try {
         var s = JSON.parse(localStorage.getItem('topik2.v2') || 'null');
-        var t = s && s.settings && s.settings.theme;
-        if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t);
-      } catch (e) { /* storage blocked: keep auto theme */ }
+        if (s && s.settings && s.settings.uiLang === 'en') {
+          document.documentElement.setAttribute('data-ui-lang', 'en');
+          document.documentElement.classList.add('ui-lang-pending');
+          setTimeout(function () { document.documentElement.classList.remove('ui-lang-pending'); }, 2000);
+        }
+      } catch (e) { /* storage blocked: keep Korean */ }
     })();
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lexend:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
   <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="styles/omr.css">
-  <link rel="stylesheet" href="styles/components.css">
+  <link rel="stylesheet" href="styles/controls.css">
+  <link rel="stylesheet" href="styles/sheet.css">
   <link rel="stylesheet" href="styles/screens.css">
   <link rel="stylesheet" href="styles/loop.css">
   <link rel="stylesheet" href="styles/deck-mock.css">
@@ -33,22 +37,21 @@
 
   <header class="topbar">
     <div class="topbar__inner">
-      <a class="brand" href="#/today">TOPIK II 읽기 <span class="brand__dot" aria-hidden="true">·</span> <span class="num">102회</span></a>
+      <a class="brand" href="#/today">TOPIK II 읽기 <span class="brand__sub num">102회</span></a>
       <nav class="topnav" aria-label="주 메뉴">
         <a href="#/today" data-nav="today">오늘</a>
         <a href="#/map" data-nav="map">지도</a>
         <a href="#/deck" data-nav="deck">덱</a>
         <a href="#/mock" data-nav="mock">모의고사</a>
+        <a href="#/guide" data-nav="guide">사용법</a>
       </nav>
-      <button type="button" class="theme-toggle gloss-toggle" id="gloss-toggle" aria-pressed="true"
-        aria-keyshortcuts="G" title="단어: 올리거나 누르기 · 문장: 오른쪽 클릭이나 길게 누르기">주석 <kbd aria-hidden="true">G</kbd></button>
-      <button type="button" class="theme-toggle" id="theme-toggle" aria-label="테마 바꾸기">
-        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
-          <circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"></circle>
-          <path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"></path>
-        </svg>
-        <span class="theme-toggle__label" data-field="theme">자동</span>
-      </button>
+      <div class="topbar__tools">
+        <button type="button" class="hdr-btn gloss-toggle" id="gloss-toggle" aria-pressed="true"
+          aria-keyshortcuts="G" title="단어: 올리거나 누르기 · 문장: 오른쪽 클릭이나 길게 누르기">주석</button>
+        <button type="button" class="hdr-btn lang-toggle" id="lang-toggle" aria-pressed="false" aria-label="영어 화면"
+          data-no-gloss><span class="lang-toggle__opt is-on" data-lang="ko" lang="ko">한</span><span class="lang-toggle__sep"
+          aria-hidden="true">/</span><span class="lang-toggle__opt" data-lang="en" lang="en">EN</span></button>
+      </div>
     </div>
   </header>
 
@@ -62,7 +65,7 @@
   </div>
 
   <template id="tpl-load-error">
-    <section class="placeholder">
+    <section class="sheet placeholder">
       <h1 class="screen-title">문제 데이터를 불러오지 못했습니다</h1>
       <p class="placeholder__note"><code>lessons.js</code>가 <code>index.html</code>과 같은 폴더에 있는지 확인하세요.</p>
     </section>
@@ -79,18 +82,21 @@
   <script src="js/strategies.js"></script>
   <script src="js/store-views.js"></script>
   <script src="js/store.js"></script>
+  <script src="js/reset-flow.js"></script>
   <script src="js/session.js"></script>
   <script src="js/run-core.js"></script>
   <script src="js/deck-cards.js"></script>
   <script src="js/gloss-text.js"></script>
   <script src="js/render/gloss.js"></script>
+  <script src="js/ui-lang.js"></script>
   <script src="js/translate.js"></script>
   <script src="js/render/passage.js"></script>
-  <script src="js/render/omr.js"></script>
+  <script src="js/render/tiles.js"></script>
   <script src="js/render/choices.js"></script>
   <script src="js/screens/map.js"></script>
   <script src="js/screens/study-tabs.js"></script>
   <script src="js/screens/study.js"></script>
+  <script src="js/screens/reset-dialog.js"></script>
   <script src="js/screens/today.js"></script>
   <script src="js/screens/runner.js"></script>
   <script src="js/screens/sprint.js"></script>
@@ -98,6 +104,7 @@
   <script src="js/screens/deck.js"></script>
   <script src="js/screens/review-mock.js"></script>
   <script src="js/screens/review.js"></script>
+  <script src="js/screens/guide.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

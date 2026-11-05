@@ -27,12 +27,13 @@
   const CLICK_GUARD_MS = 800;
 
   const SKIP = '.gloss-word, .gloss-run, code, kbd, input, textarea, select, option, script, style, svg, template, ' +
-    '.line-en, .sr-only, [data-no-gloss], [lang="en"], .passage, .insert-box__text, #gloss-tooltip';
+    '.line-en, .sr-only, [data-no-gloss], [lang="en"], .passage, .insert-box__text, #gloss-tooltip, ' +
+    '.reset-dialog'; // a modal sits above the tooltip, so word glosses would hide behind it
   const CONTROL = 'a, button, summary, label, [role="button"]';
   const HOST = '.sent, [data-sent-key], [data-line-en], p, h1, h2, h3, h4, h5, h6, li, dt, dd, th, td, ' +
     'caption, figcaption, summary, legend, label, button, a';
-  const LINE_SKIP = 'input, textarea, select, [data-no-gloss], [lang="en"]';
-  const COMPOSE_SKIP = '.line-en, .sr-only, .ov, svg, script, style, [lang="en"]';
+  const LINE_SKIP = 'input, textarea, select, [data-no-gloss], [lang="en"], .reset-dialog';
+  const COMPOSE_SKIP = '.line-en, .sr-only, .sq, .tile, .choice__n, svg, script, style, [lang="en"]';
 
   // ── Pure: which state applies ──
 
@@ -267,7 +268,9 @@
     const g = Gloss();
     if (g) g.hideIfDetached();
     const on = isOn();
+    const lang = root.UiLang || null; // the 한 / EN switch turns UI text English first
     records.forEach(r => r.addedNodes.forEach(n => {
+      if (lang) lang.onAdded(n);
       if (on) { passNode(n); roveWithin(n); } else untab(n);
     }));
     observer.takeRecords(); // the spans just added are ours
@@ -541,9 +544,14 @@
     apply();
   }
 
+  // After the 한 / EN switch: wrap the Korean that is back (or still there) for the gloss layer.
+  function refreshUi() {
+    if (observer) apply();
+  }
+
   const Translate = {
     LEARN_END, phaseOf, examOn, layerOn, init, setContext, isOn, toggle, onKey,
-    toggleLine, closeAll, findLineHost, lineFor
+    toggleLine, closeAll, findLineHost, lineFor, refreshUi
   };
 
   if (typeof window !== 'undefined') window.Translate = Translate;

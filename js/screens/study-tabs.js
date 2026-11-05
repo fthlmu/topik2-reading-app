@@ -22,8 +22,7 @@
 
   function cardFace(item, flipped) {
     if (!flipped) {
-      return '<span class="flash__kr" lang="ko">' + esc(item.kr) + '</span>' +
-        '<span class="flash__hint">눌러서 뜻 보기</span>';
+      return '<span class="flash__kr" lang="ko">' + esc(item.kr) + '</span>';
     }
     return '<span class="flash__kr flash__kr--small" lang="ko">' + esc(item.kr) + '</span>' +
       (item.roman ? '<span class="flash__roman">' + esc(item.roman) + '</span>' : '') +
@@ -43,9 +42,9 @@
         '<button type="button" class="flash__card' + (state.flipped ? ' is-flipped' : '') + '" ' +
         'data-act="flip" data-no-gloss aria-pressed="' + state.flipped + '">' + cardFace(item, state.flipped) + '</button>' +
         '<div class="flash__bar">' +
-        '<button type="button" class="btn btn--quiet" data-act="prev" aria-label="이전 카드">‹ 이전</button>' +
+        '<button type="button" class="btn btn--quiet" data-act="prev" aria-label="이전 카드">이전</button>' +
         '<span class="flash__count num" aria-live="polite">' + (state.idx + 1) + ' / ' + items.length + '</span>' +
-        '<button type="button" class="btn btn--quiet" data-act="next" aria-label="다음 카드">다음 ›</button>' +
+        '<button type="button" class="btn btn--quiet" data-act="next" aria-label="다음 카드">다음</button>' +
         '<button type="button" class="btn btn--quiet flash__shuffle" data-act="shuffle">섞기</button>' +
         '</div></div>';
     }
@@ -123,11 +122,11 @@
   }
 
   function nextLabel(isLast) {
-    return isLast ? '결과 보기 →' : '다음 문제 →';
+    return isLast ? '결과 보기' : '다음 문제';
   }
 
   function selfGradeHtml(isLast) {
-    return '<p class="quiz__self-q">내 답이 맞았나요? <span class="quiz__self-hint">(자기 채점)</span></p>' +
+    return '<p class="quiz__self-q">내 답이 맞았나요?</p>' +
       '<div class="quiz__self">' +
       '<button type="button" class="btn" data-act="self" data-ok="1">맞았어요 · ' + nextLabel(isLast) + '</button>' +
       '<button type="button" class="btn btn--quiet" data-act="self" data-ok="0">틀렸어요 · ' + nextLabel(isLast) + '</button>' +
@@ -138,12 +137,14 @@
     let head;
     if (verdict === null) {
       head = '<p class="quiz__verdict">모범 답안</p><p class="quiz__answer">' + esc(item.answer) + '</p>' +
-        (typed ? '<p class="quiz__typed">내 답: ' + esc(typed) + '</p>' : '');
+        (typed ? '<p class="quiz__typed"><span class="quiz__typed-label">내 답:</span> ' + esc(typed) + '</p>' : '');
     } else if (verdict) {
       head = '<p class="quiz__verdict is-right">정답</p>';
     } else {
+      // The Korean answer sits in its own .quiz__answer span (kept by the 한 / EN switch), apart
+      // from the "오답 · 정답:" label, which switches: one text node would translate the answer too.
       const right = item.choices ? item.choices[item.answer] : item.answer;
-      head = '<p class="quiz__verdict is-wrong">오답 · 정답: ' + esc(right) + '</p>';
+      head = '<p class="quiz__verdict is-wrong">오답 · 정답: <span class="quiz__answer">' + esc(right) + '</span></p>';
     }
     const next = verdict === null
       ? selfGradeHtml(isLast)
@@ -157,7 +158,7 @@
     const n = q.items.length;
     return '<div class="quiz__score"><p class="quiz__big num">' + score + ' / ' + n + '</p>' +
       (q.selfGraded ? '<p class="quiz__note">자기 채점 포함</p>' : '') +
-      '<p>퀴즈 완료. ' + scoreMsg(score, n) + '</p>' +
+      '<p>퀴즈 완료. <span>' + scoreMsg(score, n) + '</span></p>' +
       '<button type="button" class="btn" data-act="restart">다시 풀기</button></div>';
   }
 

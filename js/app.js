@@ -2,7 +2,9 @@
 // The English layer (js/translate.js) gets each route first: Sprint and Mock runs are
 // exam screens, and its keys (G, T, Escape over an open line) come before the screen's.
 // Routes: #/today (default) · #/map · #/study/<n> · #/sprint[/retry] ·
-// #/review/<id> (sprint or mock) · #/deck[/then-sprint] · #/mock[/run].
+// #/review/<id> (sprint or mock) · #/deck[/then-sprint] · #/mock[/run] · #/guide (사용법).
+// The 한 / EN switch (js/ui-lang.js) starts before the English layer, so a screen's UI text
+// turns English before its Korean words are wrapped for the gloss layer.
 // A screen is { title, mount(root, params), unmount?(), onKey?(e) → handled },
 // defined as window.<Name>Screen by a script loaded before this file.
 (function () {
@@ -10,14 +12,13 @@
 
   const Util = (typeof window !== 'undefined' && window.Util) || {};
   const APP_TITLE = 'TOPIK II 읽기 · 102회';
-  const THEMES = ['auto', 'light', 'dark'];
-  const THEME_LABEL = { auto: '자동', light: '밝게', dark: '어둡게' };
   const NAV_FOR = {
-    today: 'today', sprint: 'today', review: 'today', map: 'map', study: 'map', deck: 'deck', mock: 'mock'
+    today: 'today', sprint: 'today', review: 'today', map: 'map', study: 'map', deck: 'deck', mock: 'mock',
+    guide: 'guide'
   };
   const SCREENS = {
     today: 'TodayScreen', map: 'MapScreen', study: 'StudyScreen', sprint: 'SprintScreen',
-    review: 'ReviewScreen', deck: 'DeckScreen', mock: 'MockScreen'
+    review: 'ReviewScreen', deck: 'DeckScreen', mock: 'MockScreen', guide: 'GuideScreen'
   };
 
   let main = null;
@@ -61,29 +62,24 @@
     document.title = screen.title ? screen.title + ' · ' + APP_TITLE : APP_TITLE;
     if (window.Translate) window.Translate.setContext({ exam: isExam(name, params) });
     screen.mount(root, params);
+    if (window.UiLang) window.UiLang.syncTitle();
     markNav(name);
     window.scrollTo(0, 0);
     main.focus({ preventScroll: true });
   }
 
-  // ── Theme ──
-
-  function applyTheme(theme) {
-    const t = THEMES.includes(theme) ? theme : 'auto';
-    if (t === 'auto') document.documentElement.removeAttribute('data-theme');
-    else document.documentElement.setAttribute('data-theme', t);
-    const btn = document.getElementById('theme-toggle');
-    if (!btn) return;
-    btn.querySelector('[data-field="theme"]').textContent = THEME_LABEL[t];
-    btn.setAttribute('aria-label', '테마 바꾸기, 지금: ' + THEME_LABEL[t]);
+  // The sticky test bar sits right under the header, whose height changes with its rows.
+  function trackHeader() {
+    const bar = document.querySelector('header.topbar');
+    if (!bar) return;
+    const set = () => document.documentElement.style.setProperty('--header-h', bar.offsetHeight + 'px');
+    set();
+    if (typeof ResizeObserver === 'function') new ResizeObserver(set).observe(bar);
+    else window.addEventListener('resize', set);
   }
 
-  function cycleTheme() {
-    const now = window.Store.get().settings.theme;
-    const next = THEMES[(THEMES.indexOf(now) + 1) % THEMES.length];
-    window.Store.setSetting('theme', next);
-    applyTheme(next);
-  }
+  // The app is light only, like the reference mock test (DESIGN.md section 4, option A).
+  // An old saved settings.theme value is kept in storage but no longer read.
 
   // ── Keys: screens get first refusal; text fields keep their keys ──
 
@@ -95,21 +91,34 @@
     if (current && typeof current.onKey === 'function' && current.onKey(e)) e.preventDefault();
   }
 
+  function claimIfVisible() {
+    if (!document.hidden && window.Store) window.Store.claimTab();
+  }
+
+  // Without lesson data the store never loads: the language comes from the pre-paint script.
   function showLoadError() {
     const tpl = document.getElementById('tpl-load-error');
     main.replaceChildren(tpl.content.cloneNode(true));
+    if (window.UiLang) window.UiLang.init(document.documentElement.getAttribute('data-ui-lang'));
+    document.documentElement.classList.remove('ui-lang-pending');
   }
 
   function boot() {
     main = document.getElementById('screen');
+    trackHeader();
     const data = Util.data();
     if (!data || !data.lessons || !Array.isArray(data.sections)) { showLoadError(); return; }
     window.Store.load();
+    // The writer role (Store: only the active tab writes the open run): this page claims it when it
+    // loads in the foreground and again whenever it gets focus or becomes visible. The run screens
+    // then re-read the stored run and show it if another tab moved on.
+    claimIfVisible();
+    window.addEventListener('focus', claimIfVisible);
+    document.addEventListener('visibilitychange', claimIfVisible);
     const note = document.getElementById('storage-note');
     if (note) note.hidden = window.Store.isPersistent();
-    applyTheme(window.Store.get().settings.theme);
-    document.getElementById('theme-toggle').addEventListener('click', cycleTheme);
     window.Gloss.init(document.getElementById('gloss-tooltip'));
+    window.UiLang.init(window.UiLang.langOf(window.Store.get().settings));
     window.Translate.init();
     window.addEventListener('hashchange', route);
     document.addEventListener('keydown', onKeyDown);

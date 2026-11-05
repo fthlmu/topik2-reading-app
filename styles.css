@@ -1,95 +1,119 @@
-/* styles.css: "Exam paper" tokens, base, top bar, page widths, buttons, print.
-   OMR answer card: styles/omr.css · Components: styles/components.css · Screens: styles/screens.css
-   Rules: 1px rules not cards · radius ≤ 4px · no shadows · no gradients · no emoji.
-   One accent (--pen). --omr-print is the card's printed red: lines and resting ovals only, never text. */
+/* styles.css: "IBT question sheet" tokens (DESIGN.md v2 section 4), base, header, page widths.
+   Controls (buttons, chips, tiles, test bar): styles/controls.css · Sheets and the question
+   anatomy: styles/sheet.css · Screens: styles/screens.css, loop.css, deck-mock.css.
+   Rules: white sheets on a blue-grey desk; gradient only on the numbered square, the one
+   primary action and the hero card; shadow only on sheets, hero, test bar and tooltip.
+   Light only, like the reference. Contrast (WCAG): every text pair 4.5:1 or more, see README. */
 
-/* ── Tokens ─────────────────────────────────────────── */
+/* ── Tokens: light ──────────────────────────────────── */
 :root {
-  --paper: #F7F4EE;
-  --paper-2: #EFEAE0;
-  --ink: #1B1B1F;
-  --ink-2: #4A4A52;
-  --ink-3: #6B6B74;         /* 4.8:1 on paper */
-  --rule: #D9D3C7;
-  --omr-print: #CF6A61;     /* 3.25:1 on paper: non-text only */
-  --pen: #C8372D;
+  --bg: #EEF3F8;            /* desk */
+  --paper: #FFFFFF;         /* sheets, rows, bars */
+  --tint: #F4F9FF;          /* passage box */
+  --line: #E4ECF3;
+  --line-strong: #7A8FA4;   /* numbered circle and untried tile edge: 3.3:1 on paper */
+  --ink: #142433;
+  --ink-soft: #3F5366;
+  --muted: #5A6E83;         /* 5.3:1 on paper, 4.7:1 on the desk */
+  --brand: #1987E5;         /* edges and fills, never text */
+  --brand-ink: #0F5FA6;     /* brand-coloured text: 6.0:1 on brand-50 */
+  --brand-deep: #0A4276;    /* ※ instruction text */
+  --brand-50: #EEF6FE;
+  --brand-100: #D6E9FB;
+  --grad-a: #1674C8;        /* gradient, lightest end: white text 4.8:1 */
+  --grad-b: #0F5FA6;
+  --sq-a: #1987E5;          /* number square, reference exact: the number sits mid-fade, 4.6:1 or more */
+  --hero-a: #0A4276;        /* hero, reference exact three stops: white text measured 4.93:1 or more */
+  --hero-b: #0F5FA6;
+  --hero-c: #1987E5;
+  --hero-glow: rgba(255, 255, 255, 0.22);
+  --desk-glow-a: rgba(25, 135, 229, 0.10);   /* the reference's two faint blue glows on the desk */
+  --desk-glow-b: rgba(25, 135, 229, 0.07);
+  --lift-blue: 0 4px 10px rgba(25, 135, 229, 0.30);    /* number square */
+  --lift-btn: 0 10px 26px rgba(25, 135, 229, 0.34);    /* primary button */
+  --hero-soft: #D6E9FB;
+  --on-white: #0F5FA6;      /* text on the hero's white button */
+  --sel-fill: #0F5FA6;      /* filled numbered circle of the selected choice */
+  --focus: #0F5FA6;
+  --good: #15936B;
+  --good-ink: #0B6E4F;
+  --good-fill: #0F7C59;
+  --good-bg: #E6F7EF;
+  --bad: #D8483F;
+  --bad-ink: #B3261E;
+  --bad-fill: #BF3A31;
+  --bad-bg: #FDECEA;
+  --amber: #FFB020;
+  --amber-edge: #B57700;
+  --amber-ink: #8A5300;
+  --amber-bg: #FFF6E5;
+  --glass: rgba(255, 255, 255, 0.82);
+  --shadow-sheet: 0 1px 2px rgba(16, 42, 67, 0.06), 0 8px 24px rgba(16, 42, 67, 0.06);
+  --shadow-hero: 0 20px 48px rgba(15, 95, 166, 0.20);
+  --shadow-tip: 0 4px 16px rgba(16, 42, 67, 0.14);
 
-  --font-passage: 'Noto Serif KR', 'Nanum Myeongjo', 'AppleMyungjo', serif;
-  --font-ui: 'Pretendard Variable', 'Pretendard', 'Noto Sans KR', system-ui, sans-serif;
+  --font-display: 'Lexend', 'Noto Sans KR', system-ui, sans-serif;
+  --font-ui: 'Plus Jakarta Sans', 'Noto Sans KR', system-ui, sans-serif;
+  --font-kr: 'Noto Sans KR', 'Plus Jakarta Sans', system-ui, sans-serif;
 
-  --page: 760px;            /* reading column: Study, Sprint, Mock */
-  --page-wide: 1160px;      /* Today, Map, Review, Deck at 1000px and up */
-  --measure: 68ch;
+  --page: 884px;            /* reading column: Study, Sprint, Mock, Review */
+  --page-wide: 1160px;      /* Today, Map, Deck, Guide */
   --gutter: 16px;
-  --radius: 4px;
-  --radius-sm: 2px;
+  --header-h: 64px;         /* set from the real header height by app.js */
+  --r-sheet: 18px;
+  --r-hero: 26px;
+  --r-row: 12px;
+  --r-box: 14px;
+  --r-sq: 8px;
+  --r-tip: 10px;
   --fast: 150ms;
 
   color-scheme: light;
 }
 
-/* Dark: the card under a desk lamp. --ink-3 5.1:1, --omr-print 3.4:1 on dark paper. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --paper: #1C1B19;
-    --paper-2: #242320;
-    --ink: #ECE7DC;
-    --ink-2: #B9B3A6;
-    --ink-3: #918B80;
-    --rule: #35332E;
-    --omr-print: #A35A53;
-    --pen: #E4574B;
-    color-scheme: dark;
-  }
-}
-
-:root[data-theme="dark"] {
-  --paper: #1C1B19;
-  --paper-2: #242320;
-  --ink: #ECE7DC;
-  --ink-2: #B9B3A6;
-  --ink-3: #918B80;
-  --rule: #35332E;
-  --omr-print: #A35A53;
-  --pen: #E4574B;
-  color-scheme: dark;
-}
+/* No dark tokens: the app is light only, like the reference mock test (Fathul chose option A,
+   2026-10-29). A dark OS or iPad setting no longer changes the page. */
 
 /* ── Base ───────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
 
 html {
-  background: var(--paper);
+  background: var(--bg);
   -webkit-text-size-adjust: 100%;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  scroll-padding-top: 72px;
+  scroll-padding-top: calc(var(--header-h) + 72px);
 }
 
 body {
   margin: 0;
-  background: var(--paper);
+  background:
+    radial-gradient(1100px 480px at 88% -8%, var(--desk-glow-a), transparent 60%),
+    radial-gradient(900px 420px at -5% 4%, var(--desk-glow-b), transparent 55%),
+    var(--bg);
   color: var(--ink);
   font: 400 16px/1.6 var(--font-ui);
   word-break: keep-all;          /* Korean: break between words, not inside */
-  overflow-wrap: break-word;     /* but never overflow (URLs, long tokens) */
+  overflow-wrap: break-word;
 }
 
 [hidden] { display: none !important; }
 
 a {
-  color: var(--ink);
+  color: var(--brand-ink);
   text-decoration: underline;
-  text-decoration-color: var(--ink-3);
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
 }
-a:hover { text-decoration-color: var(--ink); }
+a:hover { text-decoration-thickness: 2px; }
+
+a[href], button, summary, select, label[for], [role="button"], [role="tab"], [role="switch"] { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
 
 :focus-visible {
-  outline: 2px solid var(--ink);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
-  border-radius: var(--radius-sm);
+  border-radius: 6px;
 }
 
 h1, h2, h3 { text-wrap: balance; }
@@ -98,22 +122,21 @@ p, li { text-wrap: pretty; }
 code { font-family: inherit; font-size: 0.95em; font-weight: 600; }
 
 kbd {
-  display: inline-block;
-  min-width: 1.5em;
-  padding: 0 4px;
-  font: 500 11px/1.6 var(--font-ui);
-  font-variant-numeric: tabular-nums;
-  color: var(--ink-2);
-  text-align: center;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.9em;
+  height: 1.7em;
+  padding: 0 6px;
+  font: 600 12px/1 var(--font-display);
+  color: var(--brand-ink);
+  background: var(--brand-50);
+  border: 1px solid var(--brand-100);
+  border-radius: 6px;
 }
 
-/* Numbers: Pretendard with aligned digits (timers, counts, digit boxes). */
-.num {
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0;
-}
+/* Numbers: aligned digits (timers, counts). */
+.num { font-variant-numeric: tabular-nums; letter-spacing: 0; }
 
 .sr-only {
   position: absolute;
@@ -131,181 +154,146 @@ kbd {
   position: absolute;
   left: 8px;
   top: -64px;
-  z-index: 20;
-  padding: 8px 12px;
-  background: var(--ink);
-  color: var(--paper);
-  border-radius: var(--radius);
+  z-index: 70;
+  padding: 10px 14px;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: var(--r-row);
 }
 .skip-link:focus { top: 8px; }
 
-/* ── Top bar ────────────────────────────────────────── */
+/* Avoid a Korean flash while the English UI is applied (index.html sets the class). */
+html.ui-lang-pending .topbar__inner,
+html.ui-lang-pending #screen { visibility: hidden; }
+
+/* ── Header: the one glass element ──────────────────── */
 .topbar {
   position: sticky;
   top: 0;
-  z-index: 10;
-  background: var(--paper);
-  border-bottom: 1px solid var(--rule);
+  z-index: 60;
+  background: var(--glass);
+  -webkit-backdrop-filter: saturate(160%) blur(14px);
+  backdrop-filter: saturate(160%) blur(14px);
+  border-bottom: 1px solid var(--line);
 }
 
 .topbar__inner {
-  max-width: var(--page);
+  max-width: var(--page-wide);
   margin: 0 auto;
-  padding: 4px var(--gutter);
-  min-height: 52px;
+  padding: 10px var(--gutter);
+  min-height: 64px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  column-gap: 12px;
+  gap: 4px 6px;
 }
 
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   min-height: 44px;
   margin-right: auto;
-  font-weight: 600;
-  font-size: 15px;
+  font: 700 18px/1.2 var(--font-display);
+  letter-spacing: -0.01em;
   color: var(--ink);
   text-decoration: none;
   white-space: nowrap;
 }
-.brand__dot { color: var(--ink-3); }
-.brand .num { font-size: 13px; font-weight: 500; color: var(--ink-2); }
+.brand__sub { font: 500 14px/1.2 var(--font-display); color: var(--muted); }
 
-.topnav { display: flex; gap: 2px; }
+.topnav { display: flex; flex-wrap: wrap; gap: 2px; }
 
 .topnav a {
   display: inline-flex;
   align-items: center;
   min-height: 44px;
-  padding: 0 10px;
-  font-size: 14px;
-  color: var(--ink-2);
+  padding: 0 12px;
+  font: 600 15px var(--font-ui);
+  color: var(--ink-soft);
   text-decoration: none;
-  transition: color var(--fast) ease-out;
+  border-radius: 10px;
+  transition: background-color var(--fast) ease-out, color var(--fast) ease-out;
 }
-.topnav a:hover { color: var(--ink); }
-.topnav a[aria-current="page"] {
-  color: var(--ink);
-  font-weight: 600;
-  text-decoration: underline;
-  text-decoration-color: var(--ink);
-  text-decoration-thickness: 1.5px;
-  text-underline-offset: 6px;
-}
+.topnav a:hover { color: var(--ink); background: var(--brand-50); }
+.topnav a[aria-current="page"] { color: var(--brand-ink); background: var(--brand-50); }
 
-.theme-toggle {
+.topbar__tools { display: flex; align-items: center; gap: 6px; }
+
+/* Quiet ghost buttons in the header: 주석, 한 / EN, theme. */
+.hdr-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   min-height: 44px;
-  padding: 0 10px;
-  font: 500 13px var(--font-ui);
-  color: var(--ink-2);
+  min-width: 44px;
+  padding: 0 12px;
+  font: 600 14px var(--font-ui);
+  color: var(--ink-soft);
   background: transparent;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  cursor: pointer;
-  transition: color var(--fast) ease-out, border-color var(--fast) ease-out;
+  border: 1px solid var(--line);
+  border-radius: var(--r-row);
+  transition: background-color var(--fast) ease-out, color var(--fast) ease-out, border-color var(--fast) ease-out;
 }
-.theme-toggle:hover { color: var(--ink); border-color: var(--ink-3); }
+.hdr-btn:hover { color: var(--ink); background: var(--brand-50); border-color: var(--brand-100); }
+.hdr-btn:active { background: var(--brand-100); }
+.hdr-btn[aria-pressed="true"] { color: var(--brand-ink); background: var(--brand-50); border-color: var(--brand-100); }
 
-/* Phone: brand + theme on row 1, nav on row 2. */
-@media (max-width: 559px) {
-  .theme-toggle { order: 2; }
-  .topnav { order: 3; width: calc(100% + 20px); margin: 0 -10px; }
+.lang-toggle__opt { color: var(--muted); font-weight: 500; }
+.lang-toggle__opt.is-on { color: var(--brand-ink); font-weight: 700; }
+.lang-toggle__sep { color: var(--muted); }
+
+/* Phone and small tablet: brand + tools on row 1, the nav on row 2. */
+@media (max-width: 899px) {
+  .topbar__inner { padding-top: 6px; padding-bottom: 4px; }
+  .brand { order: 1; }
+  .topbar__tools { order: 2; }
+  .topnav { order: 3; width: calc(100% + 16px); margin: 0 -8px; }
+  .topnav a { padding: 0 10px; }
+}
+@media (max-width: 420px) {
+  .brand__sub { display: none; }
+  .hdr-btn { padding: 0 9px; font-size: 13px; }
+  .topnav a { padding: 0 8px; font-size: 14px; }
 }
 
 .storage-note {
   max-width: var(--page);
-  margin: 0 auto;
-  padding: 8px var(--gutter);
-  font-size: 13px;
-  color: var(--pen);
+  margin: 16px auto 0;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--bad-ink);
+  background: var(--bad-bg);
+  border: 1px solid var(--bad);
+  border-radius: var(--r-row);
 }
+@media (max-width: 915px) { .storage-note { margin-inline: var(--gutter); } }
 
-/* ── Page: one reading column; non-passage screens widen at 1000px and up ── */
+/* ── Page: one reading column; overview screens widen ── */
 .page {
-  padding: 32px var(--gutter) 96px;
+  padding: 28px var(--gutter) 96px;
   outline: none;
 }
 
 .screen,
 .page > .placeholder {
-  max-width: calc(var(--page) - 32px);
+  max-width: var(--page);
   margin-inline: auto;
 }
 
+.screen--today,
+.screen--map,
+.screen--deck,
+.screen--guide { max-width: var(--page-wide); }
+
 @media (min-width: 1000px) {
-  :root { --gutter: 40px; }
-  .topbar__inner { max-width: var(--page-wide); }
-  .screen--today,
-  .screen--map,
-  .screen--review,
-  .screen--deck { max-width: calc(var(--page-wide) - 2 * var(--gutter)); }
+  :root { --gutter: 32px; }
+  .page { padding-top: 36px; }
 }
 
-/* ── Buttons ────────────────────────────────────────── */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 44px;
-  padding: 8px 18px;
-  font: 500 15px/1.2 var(--font-ui);
-  color: var(--ink);
-  background: transparent;
-  border: 1px solid var(--ink);
-  border-radius: 3px;
-  text-decoration: none;
-  cursor: pointer;
-  transition-property: background-color, color, border-color, transform;
-  transition-duration: var(--fast);
-  transition-timing-function: ease-out;
-}
-.btn:hover { background: var(--paper-2); }
-.btn:active { transform: translateY(1px); }
-.btn:disabled { opacity: 0.45; cursor: default; }
-
-.btn--primary { background: var(--ink); color: var(--paper); }
-.btn--primary:hover { background: var(--ink-2); border-color: var(--ink-2); }
-
-.btn--lg { min-height: 48px; padding: 10px 22px; font-size: 16px; }
-
-.btn--quiet {
-  border-color: transparent;
-  color: var(--ink-2);
-  padding-inline: 10px;
-}
-.btn--quiet:hover {
-  background: transparent;
-  color: var(--ink);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-/* On/off chip (주석, 로마자, 모두 보기). Pressed = ink on paper. */
-.toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 44px;
-  padding: 0 10px;
-  font: 500 13px var(--font-ui);
-  color: var(--ink-2);
-  background: transparent;
-  border: 1px solid var(--rule);
-  border-radius: 3px;
-  cursor: pointer;
-  transition: color var(--fast) ease-out, border-color var(--fast) ease-out;
-}
-.toggle:hover { color: var(--ink); border-color: var(--ink-3); }
-.toggle[aria-pressed="true"] { color: var(--ink); border-color: var(--ink); }
-
-/* ── Motion & print ─────────────────────────────────── */
+/* ── Motion: hover/focus, 150ms fills, 300ms progress only ── */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     transition-duration: 0ms !important;
@@ -315,17 +303,21 @@ kbd {
 }
 
 @media print {
-  :root, :root[data-theme="dark"], :root:not([data-theme="light"]) {
+  :root {
+    --bg: #FFFFFF;
+    --desk-glow-a: transparent;
+    --desk-glow-b: transparent;
     --paper: #FFFFFF;
-    --paper-2: #F4F4F4;
+    --tint: #FFFFFF;
     --ink: #000000;
-    --ink-2: #333333;
-    --ink-3: #666666;
-    --rule: #BBBBBB;
+    --ink-soft: #333333;
+    --muted: #555555;
+    --line: #BBBBBB;
     color-scheme: light;
   }
-  .topbar, .storage-note, .skip-link, .gloss-tip, .pager, .keys-hint, .toggle,
-  .theme-toggle, .flash__bar, .study__verdict .btn, .omr-dock { display: none !important; }
+  .topbar, .storage-note, .skip-link, .gloss-tip, .pager, .toggle,
+  .testbar, .track, .study__verdict .btn, .run-tiles { display: none !important; }
   .page { padding: 0; }
   .screen { max-width: none; }
+  .sheet, .hero { box-shadow: none !important; }
 }

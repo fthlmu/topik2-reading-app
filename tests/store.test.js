@@ -315,6 +315,205 @@ try {
     Store.clearSprint('live');
     assert.strictEqual(Store.getSprint(), null);
   });
+
+  // 20. Run revision: every save checks the revision this tab last read or wrote. A stale tab
+  // never overwrites a run another tab changed (a matching run id alone is not enough).
+  const answerAt = at => ({ q: 2, chosen: 1, correct: true, sure: null, ms: 500, at });
+  check(() => {
+    fresh();
+    const created = Store.setSprint(mockSlot).sprint;
+    assert.strictEqual(created.rev, undefined, 'a new run starts at revision 0 (no field stored)');
+    assert.strictEqual(Store.normalize({ version: 2, sprint: mockSlot }).sprint.rev, undefined, 'old records read as 0');
+
+    // Clock-only save (time spent): allowed, revision unchanged, so two open tabs do not trade blows.
+    const r1 = Store.saveRun({ ...created, spent: [4000, 500, 0] });
+    assert.strictEqual(r1.status, 'saved');
+    assert.deepStrictEqual(r1.slot.spent, [4000, 500, 0]);
+    assert.strictEqual(r1.slot.rev, undefined);
+    // A content change (an answer) moves the revision on, and the saved copy carries it.
+    const r2 = Store.saveRun({ ...r1.slot, answers: [mockSlot.answers[0], answerAt(atLocal(2026, 10, 28)), null] });
+    assert.strictEqual(r2.status, 'saved');
+    assert.strictEqual(r2.slot.rev, 1);
+    assert.strictEqual(Store.getSprint().rev, 1);
+    // The tab keeps working from the saved copy: its next save is accepted too.
+    assert.strictEqual(Store.saveRun({ ...r2.slot, idx: 2 }).slot.rev, 2, 'moving to another question is content');
+
+    // Another tab's view of this run: the old snapshot (revision 0) comes back to save.
+    const before = ls.getItem(Store.KEY);
+    const stale = Store.saveRun({ ...created, spent: [9000, 0, 0] });
+    assert.strictEqual(stale.status, 'stale');
+    assert.strictEqual(stale.slot.rev, 2, 'the stored run is handed back to adopt');
+    assert.strictEqual(stale.slot.answers[1].q, 2, 'the answer from the newer tab is in it');
+    assert.strictEqual(ls.getItem(Store.KEY), before, 'nothing written by the stale tab');
+    // Same for a stale content change: it must not erase the newer tab's answer either.
+    assert.strictEqual(Store.saveRun({ ...created, idx: 0 }).status, 'stale');
+    assert.strictEqual(Store.getSprint().answers[1].q, 2);
+  });
+
+  // 20b. Revision read from the raw blob: another tab writing straight into storage is noticed.
+  check(() => {
+    fresh();
+    const mine = Store.setSprint(mockSlot).sprint;
+    const blob = JSON.parse(ls.getItem(Store.KEY));
+    blob.sprint = { ...blob.sprint, rev: 3, answers: [mockSlot.answers[0], answerAt(atLocal(2026, 10, 28)), null] };
+    ls.setItem(Store.KEY, JSON.stringify(blob));
+    const res = Store.saveRun({ ...mine, spent: [1, 2, 3] });
+    assert.strictEqual(res.status, 'stale');
+    assert.strictEqual(res.slot.rev, 3);
+    assert.strictEqual(JSON.parse(ls.getItem(Store.KEY)).sprint.rev, 3);
+  });
+
+  // 20c. No stored run, or a different run: nothing is written and nothing is resurrected.
+  check(() => {
+    fresh();
+    const mine = Store.setSprint(mockSlot).sprint;
+    Store.clearSprint(mine.id);
+    const before = ls.getItem(Store.KEY);
+    assert.strictEqual(Store.saveRun(mine).status, 'gone', 'finished or discarded elsewhere');
+    assert.strictEqual(ls.getItem(Store.KEY), before);
+    assert.strictEqual(Store.getSprint(), null);
+    Store.setSprint({ ...mockSlot, id: 'other' });
+    const res = Store.saveRun(mine);
+    assert.strictEqual(res.status, 'gone', 'another run started elsewhere');
+    assert.strictEqual(Store.getSprint().id, 'other');
+    assert.throws(() => Store.saveRun({ id: 'x', qs: 'nope' }), TypeError);
+  });
+
+  // 20d. A sprint slot works the same: pause is clock-only, a rated answer is content.
+  check(() => {
+    fresh();
+    const slot = {
+      id: 'sp1', qs: [3, 16], idx: 0, answers: [], startedAt: 1000, shownAt: 2000, elapsedMs: 0, pending: null
+    };
+    const made = Store.setSprint(slot).sprint;
+    const paused = Store.saveRun({ ...made, shownAt: null, elapsedMs: 7000 });
+    assert.deepStrictEqual([paused.status, paused.slot.rev], ['saved', undefined]);
+    const picked = Store.saveRun({ ...paused.slot, pending: { chosen: 2, ms: 7000 } });
+    assert.strictEqual(picked.slot.rev, 1);
+    const stale = Store.saveRun({ ...made, shownAt: 9000 });   // a stale tab resuming its old question
+    assert.strictEqual(stale.status, 'stale');
+    assert.deepStrictEqual(Store.getSprint().pending, { chosen: 2, ms: 7000 }, 'the newer pick is not rolled back');
+    // Re-creating the same run id moves its revision on, so other tabs notice.
+    assert.strictEqual(Store.setSprint({ ...slot }).sprint.rev, 2);
+  });
+
+  // 20e. Same revision, older clock: saved study time never goes backwards. Per question the larger
+  // time wins, also when the same save carries an answer (the answer is content, the clock is not).
+  check(() => {
+    fresh();
+    const made = Store.setSprint(mockSlot).sprint;                       // spent [3000, 500, 0]
+    const later = Store.saveRun({ ...made, spent: [11000, 500, 2000] }); // the tab that kept working
+    assert.deepStrictEqual(later.slot.spent, [11000, 500, 2000]);
+    const older = Store.saveRun({ ...made, spent: [1000, 4000, 0] });    // another tab, older clock
+    assert.strictEqual(older.status, 'saved');
+    assert.deepStrictEqual(older.slot.spent, [11000, 4000, 2000], 'larger time per question');
+    assert.deepStrictEqual(Store.getSprint().spent, [11000, 4000, 2000]);
+    assert.strictEqual(older.slot.rev, undefined, 'clock-only: revision unchanged');
+    const answered = Store.saveRun({
+      ...older.slot, spent: [500, 0, 0], answers: [mockSlot.answers[0], answerAt(atLocal(2026, 10, 28)), null]
+    });
+    assert.strictEqual(answered.slot.rev, 1);
+    assert.deepStrictEqual(answered.slot.spent, [11000, 4000, 2000], 'time kept with the answer too');
+    assert.deepStrictEqual(Store.getSprint().spent, [11000, 4000, 2000]);
+    // A stale save (other revision) is refused whole: it never reaches the time merge.
+    assert.strictEqual(Store.saveRun({ ...made, spent: [99999, 0, 0] }).status, 'stale');
+    assert.deepStrictEqual(Store.getSprint().spent, [11000, 4000, 2000]);
+  });
+
+  // 21. A corrupt blob while every write fails (storage full or blocked): the corrupt original is
+  // protected AND the page keeps working in memory. Reading again must not reload the corrupt blob
+  // and reset the memory (a finished sprint must still leave its session behind).
+  check(() => {
+    ls.clear();
+    ls.setItem(Store.KEY, '{broken');
+    const realSet = ls.setItem;
+    ls.setItem = () => { throw new Error('quota'); };
+    try {
+      Store.resetCache();
+      Store.load();
+      const slot = { id: 'mem1', qs: [3, 16], idx: 0, startedAt: 1000, shownAt: 1000, elapsedMs: 0, pending: null, answers: [] };
+      Store.setSprint(slot);
+      const picked = Store.saveRun({ ...slot, idx: 1, answers: [{ q: 3, chosen: 2, correct: true, sure: true, ms: 900, at: atLocal(2026, 10, 28) }] });
+      assert.strictEqual(picked.status, 'saved', 'the run is saved in memory');
+      Store.recordAttempts([{ q: 3, mode: 'sprint', chosen: 2, correct: true, sure: true, ms: 900, sessionId: 'mem1' }]);
+      Store.recordSession({ id: 'mem1', mode: 'sprint', qs: [3, 16], right: 1, total: 2, overtimeCount: 0, durationMs: 5000 });
+      Store.clearSprint('mem1');
+      assert.strictEqual(Store.get().sessions.length, 1, 'the session is still there on the next read');
+      assert.strictEqual(Store.get().attempts.length, 1);
+      assert.strictEqual(Store.getSprint(), null);
+      assert.strictEqual(Store.sessionById('mem1').id, 'mem1');
+      assert.strictEqual(Store.isPersistent(), false);
+      assert.strictEqual(ls.getItem(Store.KEY), '{broken', 'the corrupt original is untouched');
+      assert.strictEqual(ls.getItem(Store.BAK_KEY), null, 'no backup could be written either');
+    } finally {
+      ls.setItem = realSet;
+    }
+    // Another tab replaces the corrupt string with a real record: that one wins from then on.
+    const healthy = { ...Store.defaults(), attempts: [{ q: 7, mode: 'sprint', chosen: 1, correct: true, sure: true, ms: 1, at: atLocal(2026, 10, 28), sessionId: null }] };
+    ls.setItem(Store.KEY, JSON.stringify(healthy));
+    assert.deepStrictEqual(Store.get().attempts.map(a => a.q), [7]);
+    assert.strictEqual(Store.get().sessions.length, 0);
+  });
+
+  // 22. 기록 초기화: progress goes (attempts, sessions, streak, the open run, the retry list), the
+  // settings stay, this tab becomes the writer, .bak and the old progress key are left alone.
+  check(() => {
+    fresh('[1,2]');
+    Store.setSetting('uiLang', 'en');
+    Store.setSetting('gloss', false);
+    Store.setSetting('glossExam', { on: true, phase: 'learn' });
+    Store.setSetting('romanization', true);
+    Store.setSetting('theme', 'dark');
+    Store.recordAttempt({ q: 3, mode: 'sprint', chosen: 1, correct: true, sure: true, sessionId: 's1' });
+    Store.recordSession({ id: 's1', mode: 'sprint', qs: [3], right: 1, total: 1, overtimeCount: 0, durationMs: 1000, at: atLocal(2026, 10, 29, 9) });
+    Store.setSprint({ id: 'run1', qs: [3, 16], idx: 0, answers: [], startedAt: 1, shownAt: 1, elapsedMs: 0, pending: null });
+    Store.setRetry([3, 4]);
+    ls.setItem(Store.BAK_KEY, 'older copy');
+    const before = Store.get();
+    assert.ok(before.attempts.length >= 3 && before.sessions.length === 1 && before.sprint && before.retryQs);
+    assert.ok(before.streak.count >= 1);
+    const settings = JSON.parse(JSON.stringify(before.settings));
+
+    const after = Store.resetProgress();
+    assert.deepStrictEqual(after.attempts, []);
+    assert.deepStrictEqual(after.sessions, []);
+    assert.deepStrictEqual(after.streak, { last: null, count: 0 });
+    assert.strictEqual(after.sprint, null);
+    assert.strictEqual(after.retryQs, null);
+    assert.deepStrictEqual(after.settings, settings, 'uiLang, gloss, glossExam, romanization and theme all stay');
+    assert.strictEqual(after.settings.uiLang, 'en');
+    // It reached storage, and a fresh read (another tab) sees the same empty record.
+    const stored = JSON.parse(ls.getItem(Store.KEY));
+    assert.deepStrictEqual([stored.attempts, stored.sessions, stored.sprint, stored.retryQs], [[], [], null, null]);
+    assert.strictEqual(stored.settings.uiLang, 'en');
+    Store.resetCache();
+    assert.deepStrictEqual(Store.get().attempts, []);
+    assert.strictEqual(Store.statusOf(3), 'untried');
+    assert.strictEqual(Store.lastSession(), null);
+    // The reset tab is the writer; the backup and the legacy key are untouched.
+    assert.strictEqual(JSON.parse(ls.getItem(Store.ACTIVE_KEY)).id, Store.tabId);
+    assert.strictEqual(ls.getItem(Store.BAK_KEY), 'older copy');
+    assert.strictEqual(ls.getItem(Store.LEGACY_KEY), '[1,2]');
+    assert.strictEqual(Store.resetProgress().attempts.length, 0, 'resetting an empty record is fine');
+  });
+
+  // 22b. Storage blocked or full: the reset still works, in memory (nothing reaches storage).
+  check(() => {
+    fresh();
+    Store.recordAttempt({ q: 5, mode: 'sprint', chosen: 1, correct: false, sure: true });
+    const stored = ls.getItem(Store.KEY);
+    const realSet = ls.setItem;
+    ls.setItem = () => { throw new Error('blocked'); };
+    try {
+      const after = Store.resetProgress();
+      assert.deepStrictEqual(after.attempts, []);
+      assert.deepStrictEqual(Store.get().attempts, [], 'the empty record is what this page now has');
+      assert.strictEqual(Store.isPersistent(), false);
+      assert.strictEqual(ls.getItem(Store.KEY), stored, 'storage itself was not changed');
+    } finally {
+      ls.setItem = realSet;
+    }
+  });
 } finally {
   global.window.localStorage = prevWindowLS;
   global.localStorage = prevGlobalLS;

@@ -1,5 +1,5 @@
-// render.test.js — Util.esc / richText, Passage.render (all 7 passage types,
-// 〈보기〉 box, withheld, lead passages), Choices.render (exam + review), App.parse.
+// render.test.js: Util.esc / richText, Passage.render (all 7 passage types,
+// 〈보기〉 box, withheld, lead passages), Choices.render (exam rows + graded rows), App.parse.
 const assert = require('assert');
 global.window = global.window || {};
 require('../lessons.js');
@@ -111,14 +111,18 @@ Object.keys(SAMPLES).forEach(type => {
   assert.ok(!review.includes('data-choice'), 'review is not clickable');
   assert.strictEqual((review.match(/is-correct/g) || []).length, 1);
   assert.strictEqual((review.match(/is-wrong is-chosen/g) || []).length, 1);
-  // Red-pen marks live on the ovals: ring on the right answer, slash through the wrong pick.
-  assert.ok(review.includes('ov ov--lg ok') && review.includes('ov ov--lg fill bad'));
+  // Graded rows: green row + 정답 chip on the right answer, red row + 오답 chip on the wrong pick.
+  assert.ok(review.includes('choice is-correct') && review.includes('choice is-wrong is-chosen'));
+  assert.strictEqual((review.match(/state state--good/g) || []).length, 1, 'one 정답 chip');
+  assert.strictEqual((review.match(/state state--bad/g) || []).length, 1, 'one 오답 chip');
+  assert.ok(!review.includes('state--unsure'), 'no 애매 chip on a wrong pick');
   assert.ok(!review.includes('✓') && !review.includes('✗'), 'no check-mark glyphs');
-  assert.ok(Choices.render(l, { variant: 'review', chosen: l.answer, sure: false }).includes('ov ov--lg fill unsure'),
-    'right but unsure gets the triangle');
-  assert.ok(Choices.render(l, { variant: 'review', chosen: l.answer, fresh: true }).includes('fill ok is-fresh'),
-    'fresh pick animates its fill');
-  assert.ok(exam.includes('ov ov--lg') && !exam.includes('fill'), 'exam ovals start hollow');
+  assert.ok(Choices.render(l, { variant: 'review', chosen: l.answer, sure: false }).includes('state state--unsure'),
+    'right but unsure gets the 애매 chip');
+  assert.ok(Choices.render(l, { variant: 'review', chosen: l.answer, fresh: true }).includes('is-chosen is-fresh'),
+    'fresh pick fills');
+  assert.strictEqual((exam.match(/class="choice__n"/g) || []).length, l.choices.length, 'one numbered circle per row');
+  assert.ok(!exam.includes('is-picked') && !exam.includes('state'), 'exam rows start unselected and ungraded');
 
   const rightPick = Choices.render(l, { variant: 'review', chosen: l.answer });
   assert.ok(!rightPick.includes('is-wrong') && rightPick.includes('is-correct is-chosen'));
@@ -147,4 +151,5 @@ Object.keys(SAMPLES).forEach(type => {
   assert.deepStrictEqual(P('#/sprint/retry'), { name: 'sprint', params: { arg: 'retry' } });
   assert.deepStrictEqual(P('#//map//'), { name: 'map', params: { arg: null } });
   assert.deepStrictEqual(P('#map'), { name: 'map', params: { arg: null } });
+  assert.deepStrictEqual(P('#/guide'), { name: 'guide', params: { arg: null } });
 }

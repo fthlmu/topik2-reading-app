@@ -15,6 +15,68 @@
 
   const MOCK_MS = 70 * 60 * 1000;
 
+  // ── Revision (see js/store.js saveRun) ──
+
+  // Revision of an open run; a run that never changed has no "rev" field and reads as 0.
+  function revOf(slot) {
+    return slot && Number.isInteger(slot.rev) && slot.rev > 0 ? slot.rev : 0;
+  }
+
+  // What a tab does with its own copy when it claims the writer role and re-reads the stored run:
+  //   { kind: 'adopt', slot }  the stored revision differs (another tab went on): show the stored run
+  //   { kind: 'keep', slot }   same revision: carry on with this tab's copy, its clock totals brought
+  //                            up to the stored ones (see syncClock)
+  //   { kind: 'gone' }         no stored run: it was finished or discarded in the other tab
+  //   { kind: 'other' }        a different run is stored now
+  function claimOutcome(mine, stored) {
+    if (!stored) return { kind: 'gone' };
+    if (!mine || stored.id !== mine.id) return { kind: 'other' };
+    return revOf(stored) !== revOf(mine) ? { kind: 'adopt', slot: stored } : { kind: 'keep', slot: syncClock(mine, stored) };
+  }
+
+  // Same revision, so the content is the same, but the tab that was writing may have saved more time
+  // since this copy was taken (its pause, its periodic save). Take the larger clock totals, never
+  // less: sprint elapsed time on the open question, mock time per question. The question clock then
+  // restarts from these totals, so time before the handoff and visible time after it both count.
+  function syncClock(mine, stored) {
+    if (!mine || !stored || stored.id !== mine.id) return mine;
+    const next = { ...mine };
+    if (Array.isArray(mine.spent) && Array.isArray(stored.spent)) {
+      next.spent = mine.spent.map((ms, i) => Math.max(ms, stored.spent[i] || 0));
+    }
+    if (Number.isFinite(mine.elapsedMs) && Number.isFinite(stored.elapsedMs)) {
+      next.elapsedMs = Math.max(mine.elapsedMs, stored.elapsedMs);
+    }
+    return next;
+  }
+
+  // The stored sprint, when it is the run with this id and every question is answered; else null.
+  // A sprint is finished from this and nothing else, so a save that was refused can never end up
+  // in the record.
+  function sprintDoneRun(stored, id) {
+    return stored && stored.id === id && stored.idx >= stored.qs.length ? stored : null;
+  }
+
+  // The stored mock slot with this tab's clock folded in (time only grows; mine is already folded
+  // and suspended, so no question clock is running), or this tab's own copy when nothing is stored
+  // under the id. A mock is finished from this.
+  function mockFinalSlot(stored, mine) {
+    return stored && stored.id === mine.id ? { ...accepted(stored, mine), shownAt: null } : mine;
+  }
+
+  // This tab's slot after a save came back as stored: keep the tab's own (possibly newer) content,
+  // take the stored revision, and let per-question time (mock) only grow. Another run: unchanged.
+  function accepted(current, saved) {
+    if (!saved || !current || saved.id !== current.id) return current;
+    const next = { ...current };
+    const rev = Math.max(revOf(current), revOf(saved));
+    if (rev > 0) next.rev = rev; else delete next.rev;
+    if (Array.isArray(current.spent) && Array.isArray(saved.spent)) {
+      next.spent = current.spent.map((ms, i) => Math.max(ms, saved.spent[i] || 0));
+    }
+    return next;
+  }
+
   // ── Sprint ──
 
   // What #/sprint should do with the stored slot and retry list.
@@ -46,6 +108,13 @@
   function sprintChoose(slot, chosen, ms) {
     if (slot.pending || isSprintDone(slot)) return slot;
     return { ...slot, pending: { chosen, ms }, elapsedMs: 0, shownAt: null };
+  }
+
+  // A different choice before 확실/애매 replaces the pending pick (Fathul, 2026-10-29).
+  // The time stays the first pick's: the clock stopped there. Ignored without a pick.
+  function sprintRepick(slot, chosen) {
+    if (!slot.pending || isSprintDone(slot) || slot.pending.chosen === chosen) return slot;
+    return { ...slot, pending: { ...slot.pending, chosen } };
   }
 
   // Confidence for the pending pick → answer stored, next question. Ignored without a pick.
@@ -98,6 +167,13 @@
   // Back on screen (mount / reload): time spent away is not charged to the question.
   function mockResume(slot, nowMs) {
     return { ...slot, shownAt: nowMs };
+  }
+
+  // The tab went hidden or came back. Hidden: fold and stop the question's clock; visible: start
+  // it again. The 70-minute deadline is wall clock and never moves. Already in that state: unchanged.
+  function mockVisibility(slot, visible, nowMs) {
+    if (visible) return slot.shownAt == null ? mockResume(slot, nowMs) : slot;
+    return slot.shownAt == null ? slot : mockSuspend(slot, nowMs);
   }
 
   function mockJump(slot, pos, nowMs) {
@@ -166,23 +242,30 @@
   }
 
   // Idempotent: a run whose attempts are already stored is not written twice.
+  // A finished session id is final: a second tab finishing the same run later (even one that had
+  // no answers the first time) changes nothing, so Review and the saved session always agree.
   // Wrong or unsure answers seed their vocab + first grammar point into the deck.
   // Returns the review route for the run.
   function record(run, deps) {
     const { Store, SRS, lessons } = deps;
+    const route = '#/review/' + run.id;
+    if (Store.sessionById(run.id)) {
+      Store.clearSprint(run.id);
+      return route;
+    }
     const recorded = Store.get().attempts.some(a => a.sessionId === run.id);
     if (!recorded) Store.recordAttempts(run.answers.map(a => ({ ...a, mode: run.mode, sessionId: run.id })));
     Store.recordSession(summaryOf(run, q => (lessons && lessons['Q' + q]) || null));
     const keys = Session.deckKeys(run.answers, lessons, SRS.keyOf);
     if (keys.length) SRS.seedMany(keys);
     Store.clearSprint(run.id);
-    return '#/review/' + run.id;
+    return route;
   }
 
   const RunCore = {
-    MOCK_MS,
-    sprintStart, isSprintDone, sprintShow, sprintPause, sprintChoose, sprintRate,
-    mockQuestions, mockCreate, mockRemaining, mockTimeUp, mockFold, mockSuspend, mockResume,
+    MOCK_MS, revOf, accepted, claimOutcome, syncClock, sprintDoneRun, mockFinalSlot,
+    sprintStart, isSprintDone, sprintShow, sprintPause, sprintChoose, sprintRepick, sprintRate,
+    mockQuestions, mockCreate, mockRemaining, mockTimeUp, mockFold, mockSuspend, mockResume, mockVisibility,
     mockJump, mockAnswer, mockNext, mockAnsweredCount, mockPalette, mockResults, fmtCountdown,
     summaryOf, record
   };

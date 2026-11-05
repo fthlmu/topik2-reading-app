@@ -1,7 +1,13 @@
 // store.js — persistent study record in localStorage key "topik2.v2".
 // Schema (plan): { version, attempts[], sessions[], settings{}, streak{}, sprint, retryQs }.
-// settings: { romanization, theme, fontScale, gloss (주석 on/off), glossExam (sprint/mock override) }.
+// settings: { romanization, theme, fontScale, gloss (주석 on/off), glossExam (sprint/mock override),
+//   uiLang ('ko' | 'en': the app's own UI text, never the exam content; js/ui-lang.js) }.
 // "sprint" is the one in-progress run: a sprint slot, or a mock slot (mode 'mock').
+// The run carries a revision ("rev", absent = 0) that moves on whenever its content changes
+// (questions, position, answers, pending pick). saveRun() only writes for the ACTIVE tab (the one
+// that claimed the writer role last, key "topik2.activeTab") and only when the stored revision is
+// the one the saving tab last read or wrote, so a stale tab cannot roll a run back. All saves are
+// synchronous.
 // All updates return new objects; the cached state is replaced, never mutated.
 // Every write re-reads the stored blob first, so two open tabs do not clobber
 // each other. A corrupt or newer-version blob is copied to "topik2.v2.bak"
@@ -31,7 +37,7 @@
       version: VERSION,
       attempts: [],
       sessions: [],
-      settings: { romanization: false, theme: 'auto', fontScale: 1, gloss: true, glossExam: null },
+      settings: { romanization: false, theme: 'auto', fontScale: 1, gloss: true, glossExam: null, uiLang: 'ko' },
       streak: { last: null, count: 0 },
       sprint: null,
       retryQs: null
@@ -101,7 +107,11 @@
     };
   }
 
-  // In-progress sprint: { id, qs, idx, answers[], startedAt, shownAt, elapsedMs, pending }.
+  // Revision of the open run. A run that never changed has no "rev" field (reads as 0).
+  const revOf = s => (s && isCount(s.rev) ? s.rev : 0);
+  const withRev = (slot, rev) => (rev > 0 ? { ...slot, rev } : slot);
+
+  // In-progress sprint: { id, qs, idx, answers[], startedAt, shownAt, elapsedMs, pending, rev? }.
   // answers.length must equal idx; pending = chosen but confidence not yet given.
   function normalizeSprint(s) {
     if (!isObject(s) || typeof s.id !== 'string' || !s.id || !Array.isArray(s.qs)) return null;
@@ -112,13 +122,13 @@
     if (!isCount(s.idx) || s.idx > qs.length || answers.length !== s.idx) return null;
     const p = s.pending;
     const pending = isObject(p) && Number.isInteger(p.chosen) ? { chosen: p.chosen, ms: numOr(p.ms, 0) } : null;
-    return {
+    return withRev({
       id: s.id, qs, idx: s.idx, answers,
       startedAt: numOr(s.startedAt, 0),
       shownAt: numOr(s.shownAt, null),
       elapsedMs: Math.max(0, numOr(s.elapsedMs, 0)),
       pending
-    };
+    }, revOf(s));
   }
 
   // In-progress mock: { id, mode:'mock', qs, idx, answers[answer|null per q], spent[ms per q],
@@ -131,13 +141,13 @@
     if (answers.some((a, i) => raw[i] != null && (!a || a.q !== qs[i]))) return null;
     if (!isCount(s.idx) || s.idx >= qs.length || !Number.isFinite(s.deadline)) return null;
     const spent = Array.isArray(s.spent) ? s.spent : [];
-    return {
+    return withRev({
       id: s.id, mode: 'mock', qs, idx: s.idx, answers,
       spent: qs.map((_, i) => Math.max(0, numOr(spent[i], 0))),
       startedAt: numOr(s.startedAt, 0),
       deadline: s.deadline,
       shownAt: numOr(s.shownAt, null)
-    };
+    }, revOf(s));
   }
 
   // Sprint/mock 주석 override: { on, phase: 'learn' | 'drill' } (js/translate.js examOn).
@@ -166,7 +176,8 @@
         theme: THEMES.includes(settings.theme) ? settings.theme : 'auto',
         fontScale: numOr(settings.fontScale, 1),
         gloss: settings.gloss !== false,
-        glossExam: normalizeGlossExam(settings.glossExam)
+        glossExam: normalizeGlossExam(settings.glossExam),
+        uiLang: settings.uiLang === 'en' ? 'en' : 'ko'
       },
       streak: {
         last: typeof streak.last === 'string' ? streak.last : null,
@@ -224,8 +235,10 @@
     try { ls.setItem(BAK_KEY, raw); copied = true; } catch (err) { copied = false; }
     blocked = !copied;
     if (copied) { save(defaults()); return cache; }
+    // The rejected string stays the "last read" one: while it is unchanged in storage, get() keeps
+    // this in-memory state (and everything done to it) instead of reloading the corrupt blob.
     cache = defaults();
-    cacheRaw = null;
+    cacheRaw = raw;
     persistent = false;
     return cache;
   }
@@ -310,10 +323,102 @@
     return get().sprint;
   }
 
+  // ── The active tab ──
+  // Several tabs can show the app, but only one writes the open run: the last tab that claimed the
+  // role. A tab claims on load, on focus, when it becomes visible, when it starts a run, and when the
+  // person presses "continue here". The claim is a small separate key, {id, at}, so it never races
+  // with the study record. A tab that is not named reads the run but does not write it.
+
+  const ACTIVE_KEY = 'topik2.activeTab';
+  const TAB_ID = 't' + Math.floor(Math.random() * 0xffffffff).toString(36) + Date.now().toString(36);
+
+  function readActive() {
+    const raw = readRaw(ACTIVE_KEY);
+    if (raw == null) return null;
+    try {
+      const v = JSON.parse(raw);
+      return isObject(v) && typeof v.id === 'string' ? v : null;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  // Become the writer. true = this tab is named (also when it already was: nothing is written then,
+  // so the other tabs get no event). false = no storage, or the write failed.
+  function claimTab() {
+    const ls = storage();
+    if (!ls) return false;
+    const current = readActive();
+    if (current && current.id === TAB_ID) return true;
+    try {
+      ls.setItem(ACTIVE_KEY, JSON.stringify({ id: TAB_ID, at: Date.now() }));
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  // May this tab write the run? A readable key that names another tab says no, whatever happened to
+  // this tab's own claim (a claim that could not be written does not make it the writer). Nobody
+  // named (never claimed, key removed or unreadable) or no storage at all: yes, this tab is alone.
+  function isActiveTab() {
+    if (!storage()) return true;
+    const current = readActive();
+    return !current || current.id === TAB_ID;
+  }
+
+  // Start (or replace) the open run, whatever is stored, and become the writer. A different run
+  // starts at the slot's own revision (0); the same run id again moves its revision on so other
+  // tabs notice.
   function setSprint(slot) {
     const sprint = normalizeSprint(slot);
     if (!sprint) throw new TypeError('Store.setSprint: invalid sprint slot');
-    return update(state => ({ ...state, sprint }));
+    claimTab();
+    return update(state => {
+      const prev = state.sprint;
+      const rev = prev && prev.id === sprint.id ? revOf(prev) + 1 : revOf(sprint);
+      return { ...state, sprint: withRev(sprint, rev) };
+    });
+  }
+
+  // What a revision protects: the run's questions, position, answers and pending pick. Time
+  // bookkeeping (spent, shownAt, elapsedMs, deadline) is not content, so two open tabs that
+  // only save the clock do not invalidate each other.
+  const contentKey = s => JSON.stringify([s.qs, s.idx, s.answers, s.pending || null]);
+
+  // Same revision, so nobody changed the content; the clock may differ. Saved study time only grows:
+  // per question the larger of the stored and the saved time wins (a tab with an older clock cannot
+  // roll it back). Sprint slots have no per-question time list and pass through.
+  function mergeSpent(stored, next) {
+    if (!Array.isArray(stored.spent) || !Array.isArray(next.spent)) return next;
+    return { ...next, spent: next.spent.map((ms, i) => Math.max(ms, numOr(stored.spent[i], 0))) };
+  }
+
+  // Save of the open run, synchronous. Only the ACTIVE tab writes it, and a write must carry the
+  // revision this tab last read or wrote; the check runs on the freshly re-read stored blob.
+  //   { status: 'saved', slot }  written; slot is the stored copy (revision moved on if the
+  //                              content changed): keep working from it
+  //   { status: 'inactive', slot }  another tab is the writer: nothing written, slot is the
+  //                              stored run (or null)
+  //   { status: 'stale', slot }  another tab changed this run since (two tabs claiming within the
+  //                              same moment): nothing written, slot is the stored run to adopt
+  //   { status: 'gone', slot: null }  no stored run, or a different one: nothing written
+  function saveRun(slot) {
+    const next = normalizeSprint(slot);
+    if (!next) throw new TypeError('Store.saveRun: invalid run slot');
+    if (!isActiveTab()) return { status: 'inactive', slot: get().sprint };
+    let result = { status: 'gone', slot: null };
+    update(state => {
+      const stored = state.sprint;
+      if (!stored || stored.id !== next.id) return state;
+      if (revOf(stored) !== revOf(next)) { result = { status: 'stale', slot: stored }; return state; }
+      const merged = mergeSpent(stored, next);
+      const rev = revOf(stored) + (contentKey(stored) === contentKey(merged) ? 0 : 1);
+      const written = withRev(merged, rev);
+      result = { status: 'saved', slot: written };
+      return { ...state, sprint: written };
+    });
+    return result;
   }
 
   // Clear the run slot; with an id, only when that run is still the stored one.
@@ -323,6 +428,16 @@
 
   function setRetry(qs) {
     return update(state => ({ ...state, retryQs: normalizeQs(qs) }));
+  }
+
+  // 기록 초기화: delete the progress (attempts, sessions, streak, the open sprint/mock run, the retry
+  // list) and keep the settings (uiLang, gloss, glossExam, romanization, the old theme value). This
+  // tab becomes the writer first. Works with storage blocked (memory only). Another open tab reads the
+  // empty record on its next read and leaves its run (the run is gone). The old "topik2_progress"
+  // key and the .bak keys are left alone.
+  function resetProgress() {
+    claimTab();
+    return update(state => ({ ...defaults(), settings: state.settings }));
   }
 
   function sessionById(id) {
@@ -346,8 +461,9 @@
 
   const Store = {
     KEY, BAK_KEY, LEGACY_KEY, defaults, normalize, migrateLegacy, load, get, save,
-    recordAttempt, recordAttempts, setSetting, recordSession, getSprint, setSprint, clearSprint, setRetry,
-    sessionById, isPersistent, resetCache,
+    recordAttempt, recordAttempts, setSetting, recordSession, getSprint, setSprint, saveRun,
+    clearSprint, setRetry, resetProgress, sessionById, isPersistent, resetCache,
+    ACTIVE_KEY, tabId: TAB_ID, claimTab, isActiveTab,
     statusOf: view(Views.statusOf),
     statusMap: view(Views.statusMap),
     cardMap: view(Views.cardMap),
