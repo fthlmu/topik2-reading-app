@@ -3,8 +3,9 @@
 // (untried to start, tinted as you go while a sprint is open, graded once done), meta
 // chips with real numbers (progress, accuracy, streak), then 시작 / 덱만 보기. Beside it a
 // white sheet with the deck, the last session and weak sections; below, the 50-question
-// palette (MapScreen.html({ compact: true })). At the very bottom, a quiet 기록 초기화 control opens a
-// confirm + PIN dialog (js/screens/reset-dialog.js) that deletes all progress.
+// palette (MapScreen.html({ compact: true })). At the very bottom, two quiet controls: 기기 동기화
+// (js/screens/sync-dialog.js, computer <-> iPad sync) and 기록 초기화, a confirm + PIN dialog
+// (js/screens/reset-dialog.js) that deletes all progress.
 // context() gathers data; each *Part renders one block from it. The freshly
 // picked set is kept in `pick` so 시작 starts exactly the questions the time
 // estimate was made for. With cards due, 시작 runs the deck first
@@ -214,12 +215,16 @@
       '<h2 class="sheet-title" id="today-map-h">진도</h2>' + window.MapScreen.html({ compact: true }) + '</section>';
   }
 
-  // The quiet 기록 초기화 control at the bottom, and its (closed) dialog: js/screens/reset-dialog.js.
-  function resetPart() {
-    return window.ResetDialog.html();
+  // The quiet controls at the bottom: 기기 동기화 (js/screens/sync-dialog.js) beside 기록 초기화
+  // (js/screens/reset-dialog.js), each with its (closed) dialog. Without the sync scripts, reset only.
+  function toolsPart() {
+    const sync = window.Sync && window.SyncDialog ? window.Sync.status() : null;
+    const synced = !!sync && sync.state !== 'unset' && sync.state !== 'off';
+    return '<div class="today-tools">' + (sync ? window.SyncDialog.html(sync) : '') +
+      window.ResetDialog.html({ synced }) + '</div>';
   }
 
-  const PARTS = [heroPart, sidePart, mapPart, resetPart];
+  const PARTS = [heroPart, sidePart, mapPart, toolsPart];
 
   // Today's last finished session, with one tile state per question (null if none today).
   function doneToday(state, today) {
@@ -302,11 +307,13 @@
   }
 
   // After the right PIN: the record is deleted, so draw Today again (0 / 50), focus the new control,
-  // then open the centered done pop-up (it returns focus to that control when it closes).
+  // then open the centered done pop-up (it returns focus to that control when it closes). With device
+  // sync on, the reset goes to the server at once.
   function resetDone() {
     draw();
     focusAct('reset-open');
     window.ResetDialog.showDone(view.root);
+    if (window.Sync) window.Sync.syncNow();
   }
 
   const ACTIONS = {
@@ -337,15 +344,24 @@
     if (view && e.target.matches && e.target.matches('[data-reset-dialog]')) window.ResetDialog.onClose(view.root);
   }
 
+  // The sync dialog closed: draw again (a join may have brought in records) and refocus its control.
+  function syncClosed() {
+    if (!view) return;
+    draw();
+    focusAct('sync-open');
+  }
+
   function mount(root) {
     view = { root, pick: [] };
     draw();
     root.addEventListener('click', onClick);
     root.addEventListener('submit', onSubmit);
     root.addEventListener('close', onClose, true);
+    view.unbindSync = window.SyncDialog && window.Sync ? window.SyncDialog.bind(root, { onClosed: syncClosed }) : null;
   }
 
   function unmount() {
+    if (view && view.unbindSync) view.unbindSync();
     view = null;
   }
 

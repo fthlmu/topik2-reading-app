@@ -7,11 +7,16 @@
 // turns English before its Korean words are wrapped for the gloss layer.
 // A screen is { title, mount(root, params), unmount?(), onKey?(e) → handled },
 // defined as window.<Name>Screen by a script loaded before this file.
+// A failing boot or screen mount shows a short message with a 새로고침 (Reload) button instead of a
+// blank page (a new index.html mixed with old cached scripts did that on the iPad). Device sync
+// (js/sync.js) is optional: without window.Sync the app boots as before. A pairing link (?sync=CODE)
+// is taken off the address and handed to Sync, and Today asks before it connects.
 (function () {
   'use strict';
 
   const Util = (typeof window !== 'undefined' && window.Util) || {};
   const APP_TITLE = 'TOPIK II 읽기 · 102회';
+  const REFRESH_ROUTES = ['today', 'map'];
   const NAV_FOR = {
     today: 'today', sprint: 'today', review: 'today', map: 'map', study: 'map', deck: 'deck', mock: 'mock',
     guide: 'guide'
@@ -47,25 +52,83 @@
     });
   }
 
+  // Something failed while starting or drawing a screen: a short message and a reload button. The
+  // language comes from the pre-paint script (UiLang may be the part that failed).
+  function showFatal(err) {
+    const host = main || document.getElementById('screen') || document.body;
+    const en = document.documentElement.getAttribute('data-ui-lang') === 'en';
+    const box = document.createElement('section');
+    box.className = 'sheet placeholder app-error';
+    box.setAttribute('role', 'alert');
+    box.innerHTML = '<h1 class="screen-title">' + (en ? 'The app could not open this screen.' : '화면을 열지 못했습니다') +
+      '</h1><p class="placeholder__note">' + (en ? 'Reloading the page usually fixes it.' : '새로고침하면 대부분 해결됩니다.') +
+      '</p><p><button type="button" class="btn btn--primary" data-act="app-reload">' + (en ? 'Reload' : '새로고침') +
+      '</button></p><p class="app-error__detail"><code></code></p>';
+    box.querySelector('code').textContent = String(err && err.message ? err.message : err);
+    box.querySelector('[data-act="app-reload"]').addEventListener('click', () => location.reload());
+    host.replaceChildren(box);
+    document.documentElement.classList.remove('ui-lang-pending');
+  }
+
   function route() {
+    show(false);
+  }
+
+  // quiet: a redraw after a sync, so the scroll position and the focus stay where they are.
+  function show(quiet) {
     // In-page anchors (e.g. the skip link "#screen") are not routes.
     const isRoute = !location.hash || location.hash.indexOf('#/') === 0;
     if (!isRoute && current) return;
     const { name, params } = parse(isRoute ? location.hash : '');
     const screen = resolve(name);
     if (!screen) { location.replace('#/today'); return; }
-    if (current && typeof current.unmount === 'function') current.unmount();
-    const root = document.createElement('div');
-    root.className = 'screen screen--' + name;
-    main.replaceChildren(root);
-    current = screen;
-    document.title = screen.title ? screen.title + ' · ' + APP_TITLE : APP_TITLE;
-    if (window.Translate) window.Translate.setContext({ exam: isExam(name, params) });
-    screen.mount(root, params);
+    const y = window.scrollY;
+    try {
+      if (current && typeof current.unmount === 'function') current.unmount();
+      const root = document.createElement('div');
+      root.className = 'screen screen--' + name;
+      main.replaceChildren(root);
+      current = screen;
+      document.title = screen.title ? screen.title + ' · ' + APP_TITLE : APP_TITLE;
+      if (window.Translate) window.Translate.setContext({ exam: isExam(name, params) });
+      screen.mount(root, params);
+    } catch (err) {
+      current = null;
+      showFatal(err);
+      return;
+    }
     if (window.UiLang) window.UiLang.syncTitle();
     markNav(name);
+    if (quiet) { window.scrollTo(0, y); return; }
     window.scrollTo(0, 0);
     main.focus({ preventScroll: true });
+  }
+
+  // Device sync changed this device's record: redraw Today or the Map in place. Never another screen
+  // (a sprint or mock run is never re-mounted), and never under an open dialog.
+  function refresh() {
+    if (!main || !REFRESH_ROUTES.includes(parse(location.hash).name)) return;
+    if (main.querySelector('dialog[open]')) return;
+    show(true);
+  }
+
+  // ?sync=CODE (a pairing link): off the address at once, then Today asks.
+  function takePairParam(sync) {
+    let params = null;
+    try { params = new URLSearchParams(location.search); } catch (err) { return; }
+    if (!params.has('sync')) return;
+    sync.setPendingPair(params.get('sync'));
+    params.delete('sync');
+    const rest = params.toString();
+    history.replaceState(history.state, '', location.pathname + (rest ? '?' + rest : '') + location.hash);
+  }
+
+  function startSync() {
+    const sync = window.Sync;
+    if (!sync || typeof sync.start !== 'function') return;
+    takePairParam(sync);
+    sync.onApplied(refresh);
+    sync.start();
   }
 
   // The sticky test bar sits right under the header, whose height changes with its rows.
@@ -122,14 +185,20 @@
     window.Translate.init();
     window.addEventListener('hashchange', route);
     document.addEventListener('keydown', onKeyDown);
+    // Sync is optional: if it cannot start, studying on this device still works, so boot goes on.
+    try { startSync(); } catch (err) { /* see above */ }
     route();
   }
 
-  const App = { parse, route, isExam };
+  function safeBoot() {
+    try { boot(); } catch (err) { showFatal(err); }
+  }
+
+  const App = { parse, route, refresh, isExam };
   window.App = App;
   if (typeof module !== 'undefined') module.exports = App;
 
   if (typeof document === 'undefined') return;
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
-  else boot();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', safeBoot);
+  else safeBoot();
 })();

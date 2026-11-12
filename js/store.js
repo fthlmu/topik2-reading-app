@@ -12,6 +12,9 @@
 // Every write re-reads the stored blob first, so two open tabs do not clobber
 // each other. A corrupt or newer-version blob is copied to "topik2.v2.bak"
 // before the store resets. Derived (read-only) views live in store-views.js.
+// Device sync (js/sync.js): resetAt (ISO or null) is the time of the last 기록 초기화; onChange(fn)
+// is called after every successful save, and applySynced(fn) writes a merged result through the
+// same read-modify-write path (its listeners get meta.synced = true).
 (function () {
   'use strict';
 
@@ -40,9 +43,12 @@
       settings: { romanization: false, theme: 'auto', fontScale: 1, gloss: true, glossExam: null, uiLang: 'ko' },
       streak: { last: null, count: 0 },
       sprint: null,
-      retryQs: null
+      retryQs: null,
+      resetAt: null
     };
   }
+
+  let listeners = [];
 
   function storage() {
     try {
@@ -64,6 +70,7 @@
   const isCount = v => Number.isInteger(v) && v >= 0;
   const numOr = (v, d) => (Number.isFinite(v) ? v : d);
   const isoOr = v => (typeof v === 'string' ? v : new Date(0).toISOString());
+  const isoOrNull = v => (typeof v === 'string' && Number.isFinite(Date.parse(v)) ? new Date(Date.parse(v)).toISOString() : null);
 
   function normalizeAttempt(a) {
     if (!isObject(a) || !isValidQ(a.q) || !MODES.includes(a.mode)) return null;
@@ -184,7 +191,8 @@
         count: isCount(streak.count) ? streak.count : 0
       },
       sprint: normalizeSprint(raw.sprint),
-      retryQs: normalizeQs(raw.retryQs)
+      retryQs: normalizeQs(raw.retryQs),
+      resetAt: isoOrNull(raw.resetAt)
     };
   }
 
@@ -268,12 +276,33 @@
     return load();
   }
 
+  // A listener never breaks a save: its error is kept from the store on purpose.
+  function emit(state, meta) {
+    listeners.slice().forEach(fn => {
+      try { fn(state, meta); } catch (err) { /* see above */ }
+    });
+  }
+
+  // fn(state, meta) after every successful save; returns the unsubscribe function.
+  function onChange(fn) {
+    listeners = [...listeners, fn];
+    return () => { listeners = listeners.filter(x => x !== fn); };
+  }
+
   // Read-modify-write on the freshest stored state.
-  function update(fn) {
+  function update(fn, meta) {
     const base = get();
     const next = fn(base);
-    if (next !== base) save(next);
+    if (next !== base && save(next)) emit(next, meta || {});
     return next;
+  }
+
+  // Device sync: write a merged result (fn(state) -> new state) through the same path, normalized.
+  function applySynced(fn) {
+    return update(state => {
+      const next = fn(state);
+      return next === state ? state : normalize(next);
+    }, { synced: true });
   }
 
   function toAttempt(input, at) {
@@ -434,10 +463,10 @@
   // list) and keep the settings (uiLang, gloss, glossExam, romanization, the old theme value). This
   // tab becomes the writer first. Works with storage blocked (memory only). Another open tab reads the
   // empty record on its next read and leaves its run (the run is gone). The old "topik2_progress"
-  // key and the .bak keys are left alone.
+  // key and the .bak keys are left alone. resetAt = now: a synced device drops what is older.
   function resetProgress() {
     claimTab();
-    return update(state => ({ ...defaults(), settings: state.settings }));
+    return update(state => ({ ...defaults(), settings: state.settings, resetAt: new Date().toISOString() }));
   }
 
   function sessionById(id) {
@@ -463,6 +492,7 @@
     KEY, BAK_KEY, LEGACY_KEY, defaults, normalize, migrateLegacy, load, get, save,
     recordAttempt, recordAttempts, setSetting, recordSession, getSprint, setSprint, saveRun,
     clearSprint, setRetry, resetProgress, sessionById, isPersistent, resetCache,
+    nextStreak, onChange, applySynced,
     ACTIVE_KEY, tabId: TAB_ID, claimTab, isActiveTab,
     statusOf: view(Views.statusOf),
     statusMap: view(Views.statusMap),

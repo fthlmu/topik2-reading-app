@@ -26,14 +26,22 @@
       '</dialog>';
   }
 
+  // With device sync on, the reset reaches the other synced devices too: say so (one line).
+  function syncedLine(opts) {
+    return opts && opts.synced
+      ? '<p class="reset-dialog__text reset-dialog__synced">동기화된 다른 기기의 기록도 함께 지워집니다.</p>' : '';
+  }
+
   // The control, then the (closed) confirm + PIN dialog and the (closed) done pop-up.
-  function html() {
+  // opts.synced: device sync is on (js/sync.js).
+  function html(opts) {
     return '<div class="today-reset">' +
       '<button type="button" class="btn btn--quiet" data-act="reset-open">기록 초기화</button>' +
       '<dialog class="reset-dialog" data-reset-dialog aria-labelledby="reset-title-confirm">' +
       '<div class="reset-dialog__step" data-step="confirm">' +
       '<h2 class="reset-dialog__title" id="reset-title-confirm">공부 기록을 모두 지울까요?</h2>' +
       '<p class="reset-dialog__text">푼 문제, 스프린트와 모의고사 기록, 복습 덱이 모두 지워집니다. 되돌릴 수 없습니다.</p>' +
+      syncedLine(opts) +
       '<div class="reset-dialog__actions">' +
       '<button type="button" class="btn btn--quiet" data-act="reset-cancel" autofocus>취소</button>' +
       '<button type="button" class="btn btn--primary" data-act="reset-next">계속</button></div></div>' +

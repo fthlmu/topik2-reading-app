@@ -1,0 +1,25 @@
+# topik2-sync: device-sync server for the TOPIK II reading app.
+# One SQLite-backed Durable Object per sync code (works on the Workers Free plan). No KV, no secrets.
+name = "topik2-sync"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+[[durable_objects.bindings]]
+name = "SPACE"
+class_name = "SyncSpace"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SyncSpace"]
+
+# Abuse limits per client IP (Workers rate-limiting binding): every PUT, and creating a space
+# (a PUT with baseVersion 0). Over the limit: 429 { error: 'rate' }.
+[[ratelimits]]
+name = "PUT_LIMIT"
+namespace_id = "2001"
+simple = { limit = 30, period = 60 }
+
+[[ratelimits]]
+name = "CREATE_LIMIT"
+namespace_id = "2002"
+simple = { limit = 5, period = 60 }

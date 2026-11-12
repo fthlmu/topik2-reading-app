@@ -1,7 +1,7 @@
 // guide.js: 사용법 (#/guide), the one page that explains the app (DESIGN.md section 6b).
 // Every other screen shows only its title, data and actions; how it all works lives here:
 // the daily order, what each screen is for, what each tile colour means, the English layer
-// and the 한 / EN switch, every keyboard shortcut, and where records are kept.
+// and the 한 / EN switch, every keyboard shortcut, where records are kept, and device sync.
 // Each line is Korean UI copy with its English in js/ui-strings.js, so the line layer and
 // the 한 / EN switch (js/ui-lang.js) work here as on every screen. Facts come from the code:
 // keys from each screen's onKey, deck boxes from js/srs.js, the Drill date from
@@ -78,6 +78,16 @@
     '오늘 화면의 기록 초기화로 모든 기록을 지울 수 있습니다 (PIN 필요).'
   ];
 
+  // Device sync (js/sync.js, js/screens/sync-dialog.js).
+  const SYNC = [
+    '오늘 화면의 기기 동기화로 컴퓨터와 iPad의 기록을 맞춥니다. 계정은 필요 없습니다.',
+    '한 기기에서 새 코드 만들기를 누르고, 다른 기기에서 코드 입력에 그 코드를 넣습니다.',
+    '앱을 열 때, 앱으로 돌아올 때, 기록이 바뀐 뒤에 저절로 맞춥니다.',
+    '푼 문제, 스프린트와 모의고사 기록, 복습 덱이 합쳐집니다. 사라지는 기록은 없습니다.',
+    '설정과 끝나지 않은 스프린트·모의고사는 각 기기에 따로 남습니다.',
+    '동기화가 켜져 있으면 기록 초기화가 다른 기기의 기록도 지우고, 기록은 동기화 서버에도 저장됩니다.'
+  ];
+
   function lines(list) {
     return '<ul class="guide__lines">' + list.map(t => '<li>' + esc(t) + '</li>').join('') + '</ul>';
   }
@@ -121,6 +131,7 @@
       sheet('english', '영어 도움', lines(ENGLISH)) +
       sheet('keys', '단축키', keysHtml()) +
       sheet('records', '기록', lines(RECORDS)) +
+      sheet('sync', '기기 동기화', lines(SYNC)) +
       '</div>';
   }
 

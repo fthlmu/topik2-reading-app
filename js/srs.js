@@ -1,15 +1,22 @@
 // srs.js - Leitner spaced-repetition boxes for the TOPIK II reading app.
 // Keys: "Q<num>:<kind>:<index>" (kind v = vocab, g = grammar). No DOM access.
-// Record: { box:1..5, due:'YYYY-MM-DD', seen, wrong, added:'YYYY-MM-DD' }
+// Record: { box:1..5, due:'YYYY-MM-DD', seen, wrong, added:'YYYY-MM-DD', t? }
+// t = ms time of the card's last seed or grade (device sync: the newer write of a card wins;
+// cards from before sync have no t and count as 0).
 // load() validates the stored deck: a root that is not an object, or a card that does not
 // match the record shape, is skipped. The raw value is copied to "topik2_srs.bak" first, then
 // the cleaned deck is written back (if the copy fails, the original is never overwritten).
 // If a write fails, the deck stays in memory for the page session (isPersistent() says false).
+// remove() leaves a tombstone { key: tMs } in "topik2_srs.removed" so a synced device drops the
+// card too. exportSync()/importSync() hand the deck + tombstones to js/sync.js; onChange(fn)
+// is called after every seed, grade, removal and reset (not after importSync).
 (function () {
   var KEY = 'topik2_srs';
   var BAK_KEY = 'topik2_srs.bak';
+  var REMOVED_KEY = 'topik2_srs.removed';
   var INTERVALS = [1, 2, 4, 8, 16];
   var MAX_BOX = INTERVALS.length;
+  var listeners = [];
 
   function memoryStorage() {
     var m = {};
@@ -51,7 +58,8 @@
   }
   function isCard(r) {
     return isPlain(r) && isCount(r.box) && r.box >= 1 && r.box <= MAX_BOX &&
-      isDateStr(r.due) && isCount(r.seen) && isCount(r.wrong) && isDateStr(r.added);
+      isDateStr(r.due) && isCount(r.seen) && isCount(r.wrong) && isDateStr(r.added) &&
+      (r.t === undefined || (typeof r.t === 'number' && isFinite(r.t)));
   }
 
   // Keep the well-formed cards under well-formed keys. dropped = something was skipped.
@@ -118,14 +126,24 @@
   }
 
   function fresh() {
-    var t = todayStr();
-    return { box: 1, due: t, seen: 0, wrong: 0, added: t };
+    var day = todayStr();
+    return { box: 1, due: day, seen: 0, wrong: 0, added: day, t: Date.now() };
+  }
+
+  // A listener never breaks a seed or a grade: its error is kept from the deck code on purpose.
+  function emit() {
+    listeners.slice().forEach(function (fn) { try { fn(); } catch (e) { /* see above */ } });
+  }
+
+  function onChange(fn) {
+    listeners.push(fn);
+    return function () { listeners = listeners.filter(function (x) { return x !== fn; }); };
   }
 
   function seedMany(keys) {
     var store = load(), changed = false;
     keys.forEach(function (k) { if (!store[k]) { store[k] = fresh(); changed = true; } });
-    if (changed) save(store);
+    if (changed) { save(store); emit(); }
   }
   function seed(key) { seedMany([key]); }
 
@@ -136,9 +154,53 @@
     if (isRight) { rec.box = Math.min(rec.box + 1, MAX_BOX); }
     else { rec.box = 1; rec.wrong += 1; }
     rec.due = addDays(todayStr(), INTERVALS[rec.box - 1]);
+    rec.t = Date.now();
     store[key] = rec;
     save(store);
+    emit();
     return rec;
+  }
+
+  // ── Tombstones of removed cards ("topik2_srs.removed": { key: tMs }) ──
+  // A write that fails keeps them in memory until a write goes through again.
+
+  var removedMem = null;
+
+  function cleanRemoved(parsed) {
+    var out = {};
+    if (!isPlain(parsed)) return out;
+    Object.keys(parsed).forEach(function (k) {
+      var t = parsed[k];
+      if (parseKey(k) && typeof t === 'number' && isFinite(t)) out[k] = t;
+    });
+    return out;
+  }
+
+  function loadRemoved() {
+    if (removedMem) return cleanRemoved(removedMem);
+    var raw = null;
+    try { raw = storage.getItem(REMOVED_KEY); } catch (e) { return {}; }
+    try { return cleanRemoved(JSON.parse(raw || '{}')); } catch (e) { return {}; }
+  }
+
+  function saveRemoved(map) {
+    try { storage.setItem(REMOVED_KEY, JSON.stringify(map)); removedMem = null; }
+    catch (e) { removedMem = map; }
+  }
+
+  // ── Device sync (js/sync.js) ──
+
+  // Copies, so the caller can never change the stored deck by accident.
+  function exportSync() {
+    return { deck: JSON.parse(JSON.stringify(load())), removed: loadRemoved() };
+  }
+
+  // Replace the deck and its tombstones with a merged copy. Bad cards and keys are skipped.
+  function importSync(data) {
+    var src = isPlain(data) ? data : {};
+    load();
+    save(clean(src.deck).store);
+    saveRemoved(cleanRemoved(src.removed));
   }
 
   // Due keys, hardest first: lowest box, then most wrong, then oldest due.
@@ -166,27 +228,38 @@
     return out;
   }
 
+  // Remove a card and leave its tombstone, so a synced device drops it too.
   function remove(key) {
     var store = load();
-    if (store[key]) { delete store[key]; save(store); }
+    if (!store[key]) return;
+    delete store[key];
+    save(store);
+    var removed = loadRemoved();
+    removed[key] = Date.now();
+    saveRemoved(removed);
+    emit();
   }
 
-  // 기록 초기화: empty the deck, in storage and in memory. If a corrupt value could not be backed up,
-  // the original is still not overwritten (the empty deck then lives in memory only). The .bak key stays.
+  // 기록 초기화: empty the deck and its tombstones, in storage and in memory. If a corrupt value could
+  // not be backed up, the original is still not overwritten (the empty deck then lives in memory
+  // only). The .bak key stays.
   function reset() {
     load();
     save({});
+    saveRemoved({});
+    emit();
   }
 
   var SRS = {
-    KEY: KEY, BAK_KEY: BAK_KEY, INTERVALS: INTERVALS, MAX_BOX: MAX_BOX,
-    keyOf: keyOf, parseKey: parseKey, seed: seed, seedMany: seedMany, record: record,
+    KEY: KEY, BAK_KEY: BAK_KEY, REMOVED_KEY: REMOVED_KEY, INTERVALS: INTERVALS, MAX_BOX: MAX_BOX,
+    keyOf: keyOf, parseKey: parseKey, isCard: isCard, seed: seed, seedMany: seedMany, record: record,
     dueKeys: dueKeys, stats: stats, remove: remove, reset: reset,
+    exportSync: exportSync, importSync: importSync, onChange: onChange,
     isPersistent: function () { return persistent; },
     _todayStr: todayStr, _addDays: addDays,
     _useStorage: function (obj) {
       storage = obj || memoryStorage();
-      blocked = false; persistent = true; mem = null; memRaw = null; lastRaw = null;
+      blocked = false; persistent = true; mem = null; memRaw = null; lastRaw = null; removedMem = null;
     }
   };
   if (typeof window !== 'undefined') window.SRS = SRS;

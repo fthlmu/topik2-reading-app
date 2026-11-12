@@ -139,11 +139,38 @@ Cancel or Escape closes the dialog at any step and deletes nothing. A reset clea
 
 **The PIN is a guard against pressing reset by accident, not security.** It is a fixed value in `js/reset-flow.js` (one constant, in the open, in the page source) and is never shown on a screen, in the guide or here.
 
+With device sync on, the confirm step adds one line (동기화된 다른 기기의 기록도 함께 지워집니다: the other synced devices are cleared too), and the reset goes to the server right away.
+
+## Device sync (기기 동기화: computer ↔ iPad)
+
+There is no account. Two devices share one random **sync code** (12 characters, shown as `XXXX-XXXX-XXXX`).
+
+1. On Today, press **기기 동기화** (beside 기록 초기화). The line under it says the state: 꺼짐 (off), 켜짐 · 마지막 동기화 14:32 (on, last sync), 오프라인 · 다시 시도 중 (offline, retrying) or 아직 설정되지 않음 (not set up yet).
+2. On the first device press **새 코드 만들기**. The dialog shows the code in large type, a 복사 button and the pairing link `https://fthlmu.github.io/topik2-reading-app/?sync=CODE`.
+3. On the second device press **코드 입력** and type the code. Case, spaces and dashes do not matter, O reads as 0, and I and L read as 1. A code nobody made gives an error, and no space is created. Or open the pairing link: the app asks before it connects (the code is then taken off the address).
+4. **지금 동기화** syncs at once. **이 기기에서 동기화 끄기** forgets the code on that device; its records stay.
+
+- **What syncs:** attempts, finished sessions (and so the streak), the review deck and the reset time. Joining merges both records: nothing is lost.
+- **What stays per device:** settings (한 / EN, 주석, romanization), an unfinished sprint or mock, the retry list.
+- **When it syncs:** when the app opens, when the tab gets focus or becomes visible (at most every 20 s), 3 s after a change to your records, and at once when the page is hidden. Only the active tab syncs. Offline, it retries after 30 s, then waits twice as long each time, up to 5 min.
+- **Merge rules** (`js/sync-merge.js`): the later reset wins and drops everything older; attempts and sessions are combined without duplicates; per review card a reviewed card beats a freshly added one, otherwise the newer write wins, and a removed card leaves a tombstone (kept 120 days).
+- **A reset only travels between devices that are already paired.** Pairing (새 코드 만들기 / 코드 입력) is a pure union: a reset done before pairing never deletes the other device's history. A reset after pairing clears every paired device. Edge case: a third device that was offline during a reset and has not synced since can bring its old records back after a later join; likewise a reset made offline and sent only after another device joined.
+- **Server:** `sync-worker/`, a Cloudflare Worker with one SQLite-backed Durable Object per code (Workers Free plan). It has no account, no secrets and no dependencies. Each code holds one document and a version number. A write must name the version it read; otherwise the server answers 409 with the newer document, and the app merges it and tries again. Documents over 1.5 MB are refused (the status line then says 기록이 너무 커서 동기화할 수 없습니다 and the app tries again only after your next change). Per address, at most 30 writes and 5 new codes a minute (429, retried with the usual backoff). Only `https://fthlmu.github.io` and `http://localhost` / `http://127.0.0.1` pages may call it. A page opened from `file://` cannot sync.
+- **Set up (once):** deploy with `wrangler deploy --config sync-worker/wrangler.toml`, then put the `workers.dev` address into `js/sync-config.js` (`SYNC_URL`). While `SYNC_URL` is empty, the control says 아직 설정되지 않음 and the app makes no network calls.
+- **Updating:** until both devices have loaded the new version of the app, the one still on the old version does not sync. Reload it once.
+- **Device clocks:** resets are compared by each device's own time, so keep automatic date and time on, on both devices.
+- **Privacy:** anyone who knows a code can read and change that code's study record. Treat the code like a password for your study record. It holds nothing but your TOPIK practice.
+
+## Release stamp (stale cache)
+
+Every local CSS and JS URL in `index.html` ends with the same `?v=YYYYMMDD` stamp (now `20261112`). Change it in every URL at once on each release; `tests/cache-bust.test.js` fails if one is missing or different. If a screen still fails to open (for example, the browser mixed old and new files), the app shows a short message with a **새로고침** (Reload) button instead of a blank page.
+
 ## Data & storage
 
 - **`lessons.js`** holds all content (`window.TOPIK2`: passages, choices, answers, explanations, vocab, grammar, quizzes). The app only reads it and never changes it.
 - **`topik2.v2`** (localStorage): every attempt, finished sessions, settings (romanization, an unused `theme` value kept from older versions, `gloss` = 주석 on/off, `glossExam` = your 주석 choice for sprint/mock runs in the current phase, `uiLang` = 한 / EN), streak, the one open sprint or mock, and the retry list.
-- **`topik2_srs`** (localStorage): the review deck. Leitner boxes 1–5, seen again after 1 / 2 / 4 / 8 / 16 days. 알아요 moves a card up a box; 몰라요 sends it back to box 1.
+- **`topik2_srs`** (localStorage): the review deck. Leitner boxes 1–5, seen again after 1 / 2 / 4 / 8 / 16 days. 알아요 moves a card up a box; 몰라요 sends it back to box 1. Each card carries `t`, the time of its last seed or grade (device sync); a removed card leaves a tombstone in **`topik2_srs.removed`**.
+- **`topik2.sync`** (localStorage): device sync on this device: `{ code, version, lastSyncAt, lastError, resetAt }` (`resetAt` = the server's reset time at the last sync, so a reset this device already sent never comes back after a join). `topik2.v2` also holds `resetAt`, the time of the last 기록 초기화.
 - **Old progress** (`topik2_progress`, from the earlier version of this app) is copied into `topik2.v2` once, as "seen" questions on the map. The old key is **left in place, not deleted**.
 - **Safety copy:** if `topik2.v2` is unreadable or was written by a newer version, it is first copied to `topik2.v2.bak`, then reset. If that copy cannot be written, the app works from memory only (everything you do stays until you reload) and never overwrites the original.
 - **Deck check:** `topik2_srs` is validated when it is read. A root that is not an object, or a card that does not fit the record (box 1 to 5, valid due and added dates, counts), is skipped. The raw value is first copied to `topik2_srs.bak`, then the cleaned deck is written. If that copy cannot be written, the original is left alone. Once the corrupt value is gone and storage works again, the deck is written normally again. If a write fails, the deck stays in memory for the page session (grades and new cards still show; `SRS.isPersistent()` says false), until storage changes under it or a write goes through.
@@ -179,6 +206,10 @@ Runs every `tests/*.test.js` with plain Node (no install) and prints PASS / FAIL
 - `store`: saving, migration, backup, open runs and their revision (stale tab never overwrites), time that never goes backwards, streak
 - `reset-flow`: the PIN check accepts only the exact PIN, the reset clears progress and the deck and keeps settings, the dialog markup (native dialog, 6-digit password field, labels, buttons), and the PIN appears in no readable file
 - `xtab`: two tabs on one run: only the active tab writes, claiming re-reads and adopts a newer run, a stale copy is still refused, single-tab hide then reload keeps the elapsed time, a re-pick after a remount is kept, a sprint cannot finish from a refused save, no storage or an unwritable claim leaves a tab working alone
+- `sync-merge`: the merge rules: union and de-duplication, the reset time, newest card wins with tombstones and 120-day pruning, the streak, local-only fields untouched, idempotent and commutative
+- `sync-worker`: the Worker with a fake Durable Object: a new space, create, a stale write (409), bad code, oversize, bad body, the preflight, allowed and refused origins
+- `sync-client`: `js/sync.js` against the real Worker behind a fake fetch: two devices joining and syncing, a reset reaching the other device, a 409 retry, offline backoff, a timeout, the 3 s debounce, a wrong code, no calls without `SYNC_URL`, and the dialog markup
+- `cache-bust`: every local CSS and JS URL in `index.html` has the same `?v=` stamp, every file exists, and every script in `js/` is loaded
 
 ## Content status
 
@@ -215,6 +246,11 @@ Runs every `tests/*.test.js` with plain Node (no install) and prints PASS / FAIL
 | `js/pace.js` | Seconds per question by section, tiers |
 | `js/srs.js` | Leitner review boxes (`topik2_srs`), `SRS.reset()` for 기록 초기화 |
 | `js/reset-flow.js` | 기록 초기화, pure part: the PIN check and `resetAll` (no DOM) |
+| `js/sync-config.js` | `SYNC_URL`, the sync server address (empty = not set up yet) |
+| `js/sync-merge.js` | Device sync, pure part: the synced document and the merge rules (no DOM, no network) |
+| `js/sync.js` | Device sync client (`window.Sync`): codes, create / join / leave, sync, triggers, retries |
+| `js/screens/sync-dialog.js` | The 기기 동기화 control on Today, its status line and its `<dialog>` |
+| `sync-worker/` | The sync server: Cloudflare Worker + Durable Object (`wrangler.toml`, `src/index.js`) |
 | `js/strategies.js` | 18 strategy cards, one per section (AI-authored) |
 | `js/store.js` · `js/store-views.js` | Saved record (`topik2.v2`) and read-only views of it (status, accuracy, weakest sections) |
 | `js/session.js` | Picks the daily 5 questions |
@@ -239,4 +275,5 @@ Runs every `tests/*.test.js` with plain Node (no install) and prints PASS / FAIL
 *Rewritten 2026-10-28 for the redesigned app (Phase 3) by Claude Opus 5.5.*
 *English-on-demand layer added 2026-10-29 by Claude Opus 5.5.*
 *"IBT question sheet" restyle, the 사용법 page and the 한 / EN switch added 2026-10-29 by Claude Opus 5.5.*
+*Device sync (computer ↔ iPad) and the release stamp added 2026-11-12 by Claude Opus 5.5.*
 *Exam source: 102nd 한국어능력시험 II 읽기 (2025.10.19), used for personal study.*

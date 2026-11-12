@@ -514,6 +514,36 @@ try {
       ls.setItem = realSet;
     }
   });
+
+  // 23. Device sync: resetAt (null by default, set by a reset, kept through normalize), the change
+  // hook after each successful save, and applySynced (normalized, marked as a synced write).
+  check(() => {
+    const s = fresh();
+    assert.strictEqual(s.resetAt, null);
+    assert.strictEqual(Store.normalize({ version: 2, resetAt: 'garbage' }).resetAt, null);
+    assert.strictEqual(Store.normalize({ version: 2, resetAt: '2026-11-12T03:00:00Z' }).resetAt, '2026-11-12T03:00:00.000Z');
+    const seen = [];
+    const off = Store.onChange((state, meta) => seen.push(meta.synced ? 'synced' : 'local'));
+    Store.recordAttempt({ q: 3, mode: 'study', chosen: 1, correct: true });
+    const t0 = Date.now();
+    const after = Store.resetProgress();
+    assert.ok(Date.parse(after.resetAt) >= t0 - 1000, 'a reset records its time');
+    assert.strictEqual(JSON.parse(ls.getItem(Store.KEY)).resetAt, after.resetAt);
+    const next = Store.applySynced(st => ({ ...st, attempts: [{ q: 7, mode: 'sprint', at: '2026-11-12T00:00:00.000Z' }, { q: 99 }] }));
+    assert.deepStrictEqual(next.attempts.map(a => a.q), [7], 'normalized on the way in');
+    assert.strictEqual(next.attempts[0].chosen, null);
+    assert.strictEqual(Store.applySynced(st => st), Store.get(), 'nothing changed: nothing written');
+    assert.deepStrictEqual(seen, ['local', 'local', 'synced']);
+    // A listener that throws never breaks a save.
+    const offBad = Store.onChange(() => { throw new Error('listener'); });
+    Store.recordAttempt({ q: 4, mode: 'study', chosen: 1, correct: true });
+    assert.ok(Store.get().attempts.some(a => a.q === 4));
+    offBad();
+    off();
+    Store.recordAttempt({ q: 5, mode: 'study', chosen: 1, correct: true });
+    assert.strictEqual(seen.length, 4, 'unsubscribed');
+    assert.deepStrictEqual(Store.nextStreak({ last: '2026-11-11', count: 2 }, '2026-11-12'), { last: '2026-11-12', count: 3 });
+  });
 } finally {
   global.window.localStorage = prevWindowLS;
   global.localStorage = prevGlobalLS;

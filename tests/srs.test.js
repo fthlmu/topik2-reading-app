@@ -26,7 +26,12 @@ assert.strictEqual(SRS.parseKey('garbage'), null);
 // seed idempotent
 let s = fresh();
 SRS.seed('Q1:v:0');
-assert.deepStrictEqual(rec(s, 'Q1:v:0'), { box: 1, due: today, seen: 0, wrong: 0, added: today });
+{
+  // A new card carries t, the ms time of its last seed or grade (device sync: newer write wins).
+  const { t, ...card } = rec(s, 'Q1:v:0');
+  assert.deepStrictEqual(card, { box: 1, due: today, seen: 0, wrong: 0, added: today });
+  assert.ok(Number.isFinite(t) && Math.abs(t - Date.now()) < 5000, 'seed sets t');
+}
 SRS.record('Q1:v:0', true);
 SRS.seed('Q1:v:0');
 assert.strictEqual(rec(s, 'Q1:v:0').box, 2, 'seed must not reset existing record');
@@ -283,6 +288,51 @@ SRS.remove('Q9:v:9'); // no-op, no throw
   SRS.reset();
   assert.strictEqual(s11._raw.topik2_srs, '{"Q1:v:0":null}');
   assert.strictEqual(SRS.stats().total, 0);
+}
+
+// device sync: t on every write, tombstones on removal, export/import, the change hook
+{
+  const s12 = fresh();
+  const calls = [];
+  const off = SRS.onChange(() => calls.push('change'));
+  SRS.seedMany(['Q1:v:0', 'Q1:v:1']);
+  SRS.seedMany(['Q1:v:0']);                                     // nothing new: no change
+  const before = rec(s12, 'Q1:v:0').t;
+  const graded = SRS.record('Q1:v:0', true);
+  assert.ok(Number.isFinite(graded.t) && graded.t >= before, 'a grade moves t on');
+  assert.ok(SRS.isCard({ box: 1, due: today, seen: 0, wrong: 0, added: today }), 't is optional');
+  assert.ok(!SRS.isCard({ box: 1, due: today, seen: 0, wrong: 0, added: today, t: 'x' }), 't must be a number');
+  assert.ok(!SRS.isCard({ box: 1, due: today, seen: 0, wrong: 0, added: today, t: Infinity }));
+
+  SRS.remove('Q1:v:1');
+  const removed = JSON.parse(s12._raw[SRS.REMOVED_KEY]);
+  assert.deepStrictEqual(Object.keys(removed), ['Q1:v:1'], 'removal leaves a tombstone');
+  assert.ok(Number.isFinite(removed['Q1:v:1']));
+  SRS.remove('Q7:v:7');                                         // not in the deck: no tombstone, no change
+  assert.deepStrictEqual(calls, ['change', 'change', 'change'], 'seed, grade, remove');
+
+  const out = SRS.exportSync();
+  assert.deepStrictEqual(Object.keys(out.deck), ['Q1:v:0']);
+  assert.deepStrictEqual(Object.keys(out.removed), ['Q1:v:1']);
+  out.deck['Q1:v:0'].box = 5;                                   // a copy: the deck is not touched
+  assert.strictEqual(rec(s12, 'Q1:v:0').box, 2);
+
+  SRS.importSync({
+    deck: { 'Q2:v:0': { box: 3, due: today, seen: 2, wrong: 0, added: today, t: 7 }, junk: {}, 'Q2:v:1': null },
+    removed: { 'Q1:v:0': 9, 'Q3:v:0': 'x' }
+  });
+  assert.deepStrictEqual(Object.keys(JSON.parse(s12._raw.topik2_srs)), ['Q2:v:0'], 'bad cards skipped');
+  assert.deepStrictEqual(JSON.parse(s12._raw[SRS.REMOVED_KEY]), { 'Q1:v:0': 9 });
+  assert.strictEqual(calls.length, 3, 'an import is not a local change');
+
+  SRS.reset();
+  assert.strictEqual(s12._raw[SRS.REMOVED_KEY], '{}', 'reset clears the tombstones too');
+  assert.strictEqual(calls.length, 4);
+  off();
+  SRS.seed('Q5:v:0');
+  assert.strictEqual(calls.length, 4, 'unsubscribed');
+  s12.setItem(SRS.REMOVED_KEY, '{not json');
+  assert.deepStrictEqual(SRS.exportSync().removed, {}, 'unreadable tombstones read as none');
 }
 
 // broken storage degrades silently

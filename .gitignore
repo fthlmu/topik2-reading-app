@@ -4,3 +4,4 @@ lessons.js.bak-*
 _source-notes-*
 node_modules/
 .DS_Store
+.wrangler/

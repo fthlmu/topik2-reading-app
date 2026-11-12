@@ -11,6 +11,17 @@
 
 .hero__set .tile { box-shadow: none; }
 
+/* The quiet controls under the palette: 기기 동기화 beside 기록 초기화 (they wrap on a phone). */
+.today-tools {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 4px 28px;
+  margin-top: 4px;
+}
+
 /* 기록 초기화: a quiet control under the palette, and the confirm + PIN dialog behind it. */
 .today-reset {
   grid-column: 1 / -1;
@@ -20,6 +31,38 @@
   gap: 6px;
   margin-top: 4px;
 }
+.today-tools .today-reset { margin-top: 0; }
+
+/* 기기 동기화: the control, its one-line status (data, muted), and its dialog (the reset dialog's look). */
+.today-sync { display: flex; flex-direction: column; align-items: center; gap: 0; }
+.today-sync__status { margin: 0; font-size: 13px; color: var(--muted); }
+.today-sync__status .num { font-family: var(--font-display); }
+.sync-dialog__code-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sync-dialog__code {
+  margin: 4px 0;
+  font: 700 26px/1.2 var(--font-display);
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  -webkit-user-select: all;
+  user-select: all;
+}
+.sync-dialog__copied { margin: 0; font-size: 14px; font-weight: 600; color: var(--good-ink); }
+.sync-dialog__copied[hidden] { display: none; }
+.sync-dialog__link {
+  margin: 8px 0 12px;
+  font-size: 13px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  -webkit-user-select: all;
+  user-select: all;
+}
+.sync-dialog__status { margin-bottom: 6px; }
+.sync-dialog__input { letter-spacing: 0.12em; text-transform: uppercase; }
+.reset-dialog__synced { margin-top: 8px; font-weight: 600; color: var(--ink); }
+
+/* A screen that failed to open: the error text, small, under the reload button. */
+.app-error__detail { margin: 12px 0 0; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
 
 /* Done pop-up after a reset: centered by the modal dialog. The blue badge (the number-square
    gradient) pops in and the white check draws itself: the one confirmation that an irreversible

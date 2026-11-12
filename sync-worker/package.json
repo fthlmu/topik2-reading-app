@@ -1,0 +1,6 @@
+{
+  "name": "topik2-sync",
+  "private": true,
+  "type": "module",
+  "description": "Device-sync Worker for the TOPIK II reading app. No dependencies: deploy with wrangler from this folder."
+}
