@@ -106,6 +106,11 @@
 .quiz__choice .choice__num { font: 600 15px var(--font-display); color: var(--ink-soft); }
 .quiz__choice:hover:not(:disabled) { background: var(--tint); border-color: var(--brand-100); }
 .quiz__choice:disabled { cursor: not-allowed; color: var(--ink-soft); }
+/* The pick before 확인: same look as a picked answer row (sheet.css .choice.is-picked). */
+.quiz__choice.is-picked,
+.quiz__choice.is-picked:hover:not(:disabled) { background: var(--brand-50); border-color: var(--brand); }
+.quiz__choice.is-picked .choice__num { color: var(--brand-ink); font-weight: 700; }
+.quiz__confirm { margin-top: 12px; }
 .quiz__choice.is-correct { color: var(--ink); background: var(--good-bg); border-color: var(--good); }
 .quiz__choice.is-correct .choice__num { color: var(--good-ink); font-weight: 700; }
 .quiz__choice.is-wrong { background: var(--bad-bg); border-color: var(--bad); }

@@ -1,7 +1,8 @@
 // choices.js: the answer list as full-width rows, one numbered circle per choice.
-// Choices.render(lesson, { variant, chosen, sure, fresh })
+// Choices.render(lesson, { variant, chosen, sure, fresh, picked })
 //   variant 'exam'   Korean only, clickable buttons (data-choice="n"); a pick gets is-picked
-//                    (brand fill, filled circle; set by Runner.markChoices)
+//                    (brand fill, filled circle; set by Runner.markChoices, or by picked: n in Study,
+//                    where a pick can still change until 확인)
 //   variant 'review' Korean + romanization (shown by Review's 로마자 toggle), graded rows, not
 //                    clickable: green row + 정답 on the right answer, red row + 오답 on a wrong
 //                    pick, an amber 애매 chip when the right pick was marked unsure (sure === false)
@@ -26,8 +27,13 @@
     return '<span class="choice__n" aria-hidden="true">' + esc(n) + '</span>';
   }
 
-  function examItem(ch) {
-    return '<li><button type="button" class="choice" data-choice="' + esc(ch.num) + '">' + circle(ch.num) +
+  // picked (Study, before 확인): the pick's row is marked and every row says whether it is pressed.
+  // undefined (Sprint, Mock): plain rows; Runner.markChoices marks the pick.
+  function examItem(ch, picked) {
+    const on = ch.num === picked;
+    const state = picked === undefined ? '' : ' aria-pressed="' + on + '"';
+    return '<li><button type="button" class="choice' + (on ? ' is-picked' : '') + '" data-choice="' + esc(ch.num) + '"' +
+      state + '>' + circle(ch.num) +
       '<span class="sr-only">' + esc(circled(ch.num)) + ' </span>' +
       '<span class="choice__kr" lang="ko"' + lineAttrs(ch) + '>' + esc(ch.kr) + '</span></button></li>';
   }
@@ -59,8 +65,9 @@
     const o = opts || {};
     const variant = o.variant === 'review' ? 'review' : 'exam';
     const review = { chosen: Number.isInteger(o.chosen) ? o.chosen : null, sure: o.sure, fresh: !!o.fresh };
+    const picked = 'picked' in o ? (Number.isInteger(o.picked) ? o.picked : null) : undefined;
     const items = lesson.choices.map(ch =>
-      variant === 'review' ? reviewItem(ch, lesson.answer, review) : examItem(ch)).join('');
+      variant === 'review' ? reviewItem(ch, lesson.answer, review) : examItem(ch, picked)).join('');
     return '<ol class="choices choices--' + variant + '">' + items + '</ol>';
   }
 

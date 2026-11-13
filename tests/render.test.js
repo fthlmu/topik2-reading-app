@@ -124,6 +124,13 @@ Object.keys(SAMPLES).forEach(type => {
   assert.strictEqual((exam.match(/class="choice__n"/g) || []).length, l.choices.length, 'one numbered circle per row');
   assert.ok(!exam.includes('is-picked') && !exam.includes('state'), 'exam rows start unselected and ungraded');
 
+  // Study's pick before 확인: one row marked is-picked, every row says whether it is pressed.
+  const picked = Choices.render(l, { variant: 'exam', picked: 2 });
+  assert.strictEqual((picked.match(/is-picked/g) || []).length, 1, 'one picked row');
+  assert.ok(picked.includes('class="choice is-picked" data-choice="2" aria-pressed="true"'), 'row 2 is the pick');
+  assert.strictEqual((picked.match(/aria-pressed="false"/g) || []).length, l.choices.length - 1);
+  assert.ok(!picked.includes('state'), 'a pick is not graded');
+
   const rightPick = Choices.render(l, { variant: 'review', chosen: l.answer });
   assert.ok(!rightPick.includes('is-wrong') && rightPick.includes('is-correct is-chosen'));
 

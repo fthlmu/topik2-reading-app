@@ -147,7 +147,10 @@
 .today-row__label { margin: 0 0 4px; font: 700 15px var(--font-display); color: var(--ink); }
 .today-row__text { margin: 0; font-size: 15px; color: var(--ink-soft); }
 .today-row__text .num { font-family: var(--font-display); font-weight: 700; color: var(--ink); }
-.today-row__link { display: inline-flex; align-items: center; min-height: 44px; }
+/* inline-block, not inline-flex: as flex items the words and the bold numbers each sat on their
+   own baseline, so the link's underline stepped up and down and the spaces between them vanished.
+   One line box = one baseline = one straight underline. The padding keeps the 44px tap height. */
+.today-row__link { display: inline-block; box-sizing: border-box; min-height: 44px; padding-block: 10px; }
 
 .weak-list { margin: 2px 0 0; padding: 0; list-style: none; }
 .weak-list li + li { border-top: 1px solid var(--line); }

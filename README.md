@@ -16,7 +16,7 @@ A study app for the **102nd TOPIK II Reading exam** (2025.10.19): all **50 quest
 2. **스프린트 Sprint (~6 min).** 5 questions, Korean on screen (English on demand in the first month, see 주석 below), each timed against exam pace. No feedback yet. After each answer, tap 확실 (sure) or 애매 (unsure). The mix is 2 short + 2 medium + 1 long question, at most 2 from one section, weighted toward questions you have not tried or got wrong.
 3. **리뷰 Review (~4 min).** The result sheet (점수, 정답률, 맞힌 문제) with one numbered tile per question and its time, then each question with word glosses, graded choice rows, the explanation, the section's strategy card, and its vocab. Wrong and unsure questions go into the deck immediately (due the same day). 다시 풀기 reruns the wrong ones.
 
-Today's hero card shows the whole set, e.g. `오늘의 세트 · 복습 3장 · 스프린트 5문제 · 약 8분`. Press **시작**: it runs the deck first (when cards are due), then the sprint on its own.
+Today's hero card shows the whole set, e.g. `오늘의 세트 · 복습 3장 · 스프린트 5문제 · 약 8분`. Press **시작**: it runs the deck first (when cards are due), then the sprint on its own. The deck goes first only before the day's first set: after a finished set, **한 세트 더** opens the next sprint directly (the deck stays one tap away under 덱만 보기).
 
 ## Screens
 
@@ -26,7 +26,7 @@ Every screen shows only its title, its data and its actions. How everything work
 |---|---|---|
 | 오늘 Today | `#/today` | Hero card: date and exam date, the countdown, today's set line and its questions as numbered tiles, chips (progress, accuracy, streak), 시작 / 덱만 보기. Beside it the deck, last session and weak sections; below, the 50-tile palette (a link to the map), then a quiet 기록 초기화 button (see Reset progress) |
 | 지도 Map | `#/map` | One white sheet per section (18): letter, range, label, sprint accuracy, then one numbered tile per question in its state colour; a tile opens Study |
-| 공부 Study | `#/study/16` | One question sheet, untimed: guess first, then graded rows, explanation, vocab flashcards, grammar, practice quiz; the section's tiles and 이전 / 지도 / 다음 |
+| 공부 Study | `#/study/16` | One question sheet, untimed: pick a choice (change it freely, keys 1–4), press **확인** (or Enter) to grade it, then graded rows, explanation, vocab flashcards, grammar, practice quiz; the section's tiles and 이전 / 지도 / 다음 |
 | 스프린트 Sprint | `#/sprint` | Today's 5 timed questions with the test bar (`n / 5 풀었음`, timer chip) and progress track (`#/sprint/retry` reruns the last review's wrong ones) |
 | 리뷰 Review | `#/review/<id>` | Results of one sprint or mock; without an id, the latest session |
 | 덱 Deck | `#/deck` | Due review cards (`#/deck/then-sprint` continues into the sprint) |

@@ -1,10 +1,11 @@
 // study.js: untimed lesson view for one question (#/study/<n>).
 // One question sheet: ※ instruction, question line, passage, Korean-only choice rows.
-// Guess first, then graded rows (green 정답, red 오답), the verdict line, the explanation,
+// Pick a choice (change it freely), then 확인 grades it (Fathul, 2026-11-13: one tap was final):
+// graded rows (green 정답, red 오답), the verdict line, the explanation,
 // and fold-out vocab / grammar / practice quiz (study-tabs.js) on a quiet sheet. Below,
 // this 묶음's questions as numbered tiles (state from the Map; this question shows the
 // live answer). The passage always carries the English layer's hooks; the top bar's 주석
-// toggle (key G, js/translate.js) hides them. Keys: 1 to 4 choose · left/right prev/next ·
+// toggle (key G, js/translate.js) hides them. Keys: 1 to 4 pick · Enter 확인 · left/right prev/next ·
 // G 주석 · T line translation · Esc map.
 (function () {
   'use strict';
@@ -12,7 +13,8 @@
   const Util = (typeof window !== 'undefined' && window.Util) || require('../util.js');
   const { esc, richText, circled, section, total } = Util;
 
-  let view = null; // { root, q, lesson, chosen }
+  // picked: the current pick, still changeable · chosen: the pick 확인 graded (null until then)
+  let view = null; // { root, q, lesson, picked, chosen }
 
   function slot(name) {
     return view.root.querySelector('[data-slot="' + name + '"]');
@@ -115,33 +117,57 @@
       : '';
   }
 
+  // Before 확인 the verdict slot holds the 확인 button, enabled once a choice is picked.
+  function confirmHtml(picked) {
+    return '<div class="study__verdict-actions"><button type="button" class="btn btn--primary" data-act="confirm-choice"' +
+      (Number.isInteger(picked) ? '' : ' disabled') + ' aria-keyshortcuts="Enter">확인</button></div>';
+  }
+
   // fresh: the oval was just filled by this answer, so its fill animates.
   function drawAnswer(fresh) {
-    const { lesson, chosen } = view;
+    const { lesson, picked, chosen } = view;
     const answered = Number.isInteger(chosen);
-    slot('choices').innerHTML = window.Choices.render(lesson, { variant: answered ? 'review' : 'exam', chosen, fresh: !!fresh });
+    slot('choices').innerHTML = answered
+      ? window.Choices.render(lesson, { variant: 'review', chosen, fresh: !!fresh })
+      : window.Choices.render(lesson, { variant: 'exam', picked });
     slot('verdict').innerHTML = answered
       ? window.Choices.verdict(lesson, chosen) + '<div class="study__verdict-actions">' +
         '<button type="button" class="btn btn--quiet" data-act="retry-choice">다시 풀기</button>' + nextLink(lesson.num) + '</div>'
-      : '';
+      : confirmHtml(picked);
     slot('explain').innerHTML = answered ? explainHtml(lesson, chosen) : '';
     drawStrip();
   }
 
   // ── Actions ──
 
-  function choose(n) {
+  // A pick only marks the row (in place, so focus and the English layer's hooks stay): it can
+  // change any number of times until 확인.
+  function pick(n) {
     const { lesson } = view;
     if (Number.isInteger(view.chosen) || !lesson.choices.some(c => c.num === n)) return;
-    view = { ...view, chosen: n };
-    window.Store.recordAttempt({ q: lesson.num, mode: 'study', chosen: n, correct: n === lesson.answer });
+    view = { ...view, picked: n };
+    slot('choices').querySelectorAll('button[data-choice]').forEach(b => {
+      const on = Number(b.dataset.choice) === n;
+      b.classList.toggle('is-picked', on);
+      b.setAttribute('aria-pressed', String(on));
+    });
+    const ok = slot('verdict').querySelector('[data-act="confirm-choice"]');
+    if (ok) ok.disabled = false;
+  }
+
+  // 확인: the pick becomes the answer, is recorded once, and the rows are graded.
+  function confirmPick() {
+    const { lesson, picked } = view;
+    if (Number.isInteger(view.chosen) || !Number.isInteger(picked)) return;
+    view = { ...view, chosen: picked };
+    window.Store.recordAttempt({ q: lesson.num, mode: 'study', chosen: picked, correct: picked === lesson.answer });
     drawAnswer(true);
     const v = slot('verdict').querySelector('.verdict');
     if (v) { v.tabIndex = -1; v.focus({ preventScroll: true }); }
   }
 
   function retry() {
-    view = { ...view, chosen: null };
+    view = { ...view, picked: null, chosen: null };
     drawAnswer();
     const first = slot('choices').querySelector('.choice');
     if (first) first.focus({ preventScroll: true });
@@ -153,9 +179,11 @@
 
   function onClick(e) {
     const choiceBtn = e.target.closest('button[data-choice]');
-    if (choiceBtn) { choose(Number(choiceBtn.dataset.choice)); return; }
+    if (choiceBtn) { pick(Number(choiceBtn.dataset.choice)); return; }
     const act = e.target.closest('[data-act]');
-    if (act && act.dataset.act === 'retry-choice') retry();
+    if (!act) return;
+    if (act.dataset.act === 'confirm-choice') confirmPick();
+    else if (act.dataset.act === 'retry-choice') retry();
   }
 
   // ── Screen API ──
@@ -169,7 +197,7 @@
       view = null;
       return;
     }
-    view = { root, q, lesson, chosen: null };
+    view = { root, q, lesson, picked: null, chosen: null };
     root.innerHTML = shellHtml(lesson);
     drawInstruction();
     drawPassage();
@@ -194,7 +222,13 @@
       if (e.key === 'Escape') { location.hash = '#/map'; return true; }
       return false;
     }
-    if (/^[1-4]$/.test(e.key)) { choose(Number(e.key)); return true; }
+    if (/^[1-4]$/.test(e.key)) { pick(Number(e.key)); return true; }
+    // Enter on a focused button or link keeps its own meaning (a choice row picks, 다음 goes on).
+    const onControl = e.target && e.target.closest && e.target.closest('button, a, summary');
+    if (e.key === 'Enter' && !onControl && Number.isInteger(view.picked) && !Number.isInteger(view.chosen)) {
+      confirmPick();
+      return true;
+    }
     if (e.key === 'ArrowLeft') { go(view.q - 1); return true; }
     if (e.key === 'ArrowRight') { go(view.q + 1); return true; }
     if (e.key === 'Escape') { location.hash = '#/map'; return true; }

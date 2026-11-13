@@ -92,9 +92,9 @@
   }
 
   // ── Practice quiz ─────────────────────────────────────
-  // q = { el, items, selfGraded, state: { idx, score, answered } }. Multiple-choice
-  // items grade themselves; fill/translate items show the model answer and the
-  // learner self-grades with 맞았어요 / 틀렸어요 (each also moves on).
+  // q = { el, items, selfGraded, state: { idx, score, answered, picked } }. Multiple-choice
+  // items: a pick can change until 확인, which grades it; fill/translate items show the model
+  // answer and the learner self-grades with 맞았어요 / 틀렸어요 (each also moves on).
 
   const QUIZ_FIRST = '.quiz__choice, .quiz__input, [data-act="restart"]';
   const QUIZ_NEXT = '[data-act="next"], [data-act="self"]';
@@ -112,9 +112,10 @@
       '<p class="quiz__q" data-no-gloss>' + esc(item.q) + '</p>';
     if (item.kind === 'mcq') {
       return head + '<ol class="quiz__choices" data-no-gloss>' + (item.choices || []).map((c, ci) =>
-        '<li><button type="button" class="quiz__choice" data-act="pick" data-idx="' + ci + '">' +
+        '<li><button type="button" class="quiz__choice" data-act="pick" data-idx="' + ci + '" aria-pressed="false">' +
         '<span class="choice__num" aria-hidden="true">' + esc(circled(ci + 1)) + '</span>' +
-        '<span>' + esc(c) + '</span></button></li>').join('') + '</ol>';
+        '<span>' + esc(c) + '</span></button></li>').join('') + '</ol>' +
+        '<div class="quiz__confirm"><button type="button" class="btn" data-act="confirm" disabled>확인</button></div>';
     }
     return head + '<div class="quiz__fill">' +
       '<input class="quiz__input" type="text" autocomplete="off" aria-label="답 입력" placeholder="답을 입력하세요">' +
@@ -183,13 +184,28 @@
     quizFocus(q, QUIZ_NEXT);
   }
 
+  // A pick only marks the row; it can change until 확인.
+  function quizMark(q, choiceIdx) {
+    q.state = { ...q.state, picked: choiceIdx };
+    q.el.querySelectorAll('.quiz__choice').forEach((b, i) => {
+      b.classList.toggle('is-picked', i === choiceIdx);
+      b.setAttribute('aria-pressed', String(i === choiceIdx));
+    });
+    const ok = q.el.querySelector('[data-act="confirm"]');
+    if (ok) ok.disabled = false;
+  }
+
+  // 확인: grade the pick, lock the rows, and drop the 확인 row.
   function quizPick(q, choiceIdx) {
     const item = q.items[q.state.idx];
     q.el.querySelectorAll('.quiz__choice').forEach((b, i) => {
       b.disabled = true;
+      b.classList.remove('is-picked');
       if (i === item.answer) b.classList.add('is-correct');
       else if (i === choiceIdx) b.classList.add('is-wrong');
     });
+    const row = q.el.querySelector('.quiz__confirm');
+    if (row) row.remove();
     quizAnswer(q, choiceIdx === item.answer, null);
   }
 
@@ -200,7 +216,7 @@
   }
 
   function quizAdvance(q, bonus) {
-    q.state = { idx: q.state.idx + 1, score: q.state.score + bonus, answered: false };
+    q.state = { idx: q.state.idx + 1, score: q.state.score + bonus, answered: false, picked: null };
     quizDraw(q);
     quizFocus(q, QUIZ_FIRST);
   }
@@ -209,12 +225,13 @@
     const btn = e.target.closest('[data-act]');
     if (!btn || !q.el.contains(btn)) return;
     const act = btn.dataset.act;
-    if (act === 'pick' && !q.state.answered) quizPick(q, Number(btn.dataset.idx));
+    if (act === 'pick' && !q.state.answered) quizMark(q, Number(btn.dataset.idx));
+    else if (act === 'confirm' && !q.state.answered && Number.isInteger(q.state.picked)) quizPick(q, q.state.picked);
     else if (act === 'submit' && !q.state.answered) quizSubmit(q);
     else if (act === 'next') quizAdvance(q, 0);
     else if (act === 'self') quizAdvance(q, btn.dataset.ok === '1' ? 1 : 0);
     else if (act === 'restart') {
-      q.state = { idx: 0, score: 0, answered: false };
+      q.state = { idx: 0, score: 0, answered: false, picked: null };
       quizDraw(q);
       quizFocus(q, QUIZ_FIRST);
     }
@@ -235,7 +252,7 @@
     const q = {
       el, items,
       selfGraded: items.some(it => it.kind !== 'mcq'),
-      state: { idx: 0, score: 0, answered: false }
+      state: { idx: 0, score: 0, answered: false, picked: null }
     };
     el.addEventListener('click', e => quizOnClick(q, e));
     el.addEventListener('keydown', e => quizOnKey(q, e));

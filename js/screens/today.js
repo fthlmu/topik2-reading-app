@@ -8,8 +8,9 @@
 // (js/screens/reset-dialog.js) that deletes all progress.
 // context() gathers data; each *Part renders one block from it. The freshly
 // picked set is kept in `pick` so 시작 starts exactly the questions the time
-// estimate was made for. With cards due, 시작 runs the deck first
-// (#/deck/then-sprint), which then opens the sprint.
+// estimate was made for. With cards due, the day's first 시작 runs the deck first
+// (#/deck/then-sprint), which then opens the sprint. Once a set is finished today,
+// 한 세트 더 opens the next sprint directly (Fathul, 2026-11-13); 덱만 보기 still opens the deck.
 (function () {
   'use strict';
 
@@ -20,9 +21,15 @@
   const CARD_SEC = 15;
   const MAX_SET_TILES = 10;
 
-  let view = null; // { root, pick: number[] }
+  let view = null; // { root, pick: number[], deckFirst: boolean }
 
   const T = () => window.Tiles;
+
+  // The deck goes before the day's first set only: after a finished set (sprint or mock),
+  // the next set starts at once even though its wrong answers just added cards.
+  function deckFirst(due, done) {
+    return Number.isInteger(due) && due > 0 && !done;
+  }
 
   // The H1 (Korean) and its English for the line layer and the EN switch.
   function countdownHtml(days) {
@@ -78,7 +85,7 @@
   }
 
   function setLine(ctx, lead) {
-    const deck = ctx.due ? ' · 복습 <span class="num">' + ctx.due + '</span>장' : '';
+    const deck = ctx.deckFirst ? ' · 복습 <span class="num">' + ctx.due + '</span>장' : '';
     return '<p class="hero__sub">' + lead + deck + ' · 스프린트 <span class="num">' + ctx.pick.length +
       '</span>문제 · 약 <span class="num">' + ctx.minutes + '</span>분</p>';
   }
@@ -256,6 +263,8 @@
     const data = Util.data();
     const pick = sprint ? [] : window.Session.pick(SET_SIZE, window.Session.contextOf(state, data, today));
     const due = window.DeckCards.dueCards(data.lessons, state.settings).length;
+    const done = doneToday(state, today);
+    const first = deckFirst(due, done);
     return {
       now,
       days: daysUntil(EXAM_DATE, now),
@@ -263,9 +272,10 @@
       sprint,
       pick,
       due,
+      deckFirst: first,
       deckTotal: window.SRS.stats().total,
-      minutes: Math.ceil((window.Session.estimateSec(pick, data.lessons) + due * CARD_SEC) / 60),
-      done: doneToday(state, today),
+      minutes: Math.ceil((window.Session.estimateSec(pick, data.lessons) + (first ? due * CARD_SEC : 0)) / 60),
+      done,
       last: window.Store.lastSession(),
       weak: window.Store.weakestSections(3, 2),
       ...cardCounts()
@@ -274,7 +284,7 @@
 
   function draw() {
     const ctx = context();
-    view = { ...view, pick: ctx.pick };
+    view = { ...view, pick: ctx.pick, deckFirst: ctx.deckFirst };
     view.root.innerHTML = '<div class="today">' + PARTS.map(part => part(ctx)).join('') + '</div>';
   }
 
@@ -283,8 +293,7 @@
     if (!view || !view.pick.length) return;
     if (window.Store.getSprint()) { draw(); return; }
     window.Store.setSprint(window.Session.createSlot(view.pick, Date.now()));
-    const due = window.DeckCards.dueCards(Util.data().lessons, window.Store.get().settings).length;
-    location.hash = due ? '#/deck/then-sprint' : '#/sprint';
+    location.hash = view.deckFirst ? '#/deck/then-sprint' : '#/sprint';
   }
 
   function focusAct(name) {
@@ -352,7 +361,7 @@
   }
 
   function mount(root) {
-    view = { root, pick: [] };
+    view = { root, pick: [], deckFirst: false };
     draw();
     root.addEventListener('click', onClick);
     root.addEventListener('submit', onSubmit);
@@ -366,7 +375,7 @@
   }
 
   const TodayScreen = {
-    title: '오늘', mount, unmount,
+    title: '오늘', mount, unmount, deckFirst,
     parts: { heroPart, sidePart, mapPart }
   };
 
